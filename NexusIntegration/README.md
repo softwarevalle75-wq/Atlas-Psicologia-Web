@@ -12,7 +12,7 @@ import {createAtlasSessionIssuer} from './atlas-session-server.mjs';
 const issueAtlasSession = createAtlasSessionIssuer({
   appId: process.env.ATLAS_APP_ID,
   appSecret: process.env.ATLAS_APP_SECRET,
-  atlasOrigin: 'https://odsanchezuniversitaria-web.github.io',
+  atlasOrigin: 'https://softwarevalle75-wq.github.io',
   authorize: async ({user, courseId}) => {
     // Sustituir por la consulta de matrícula/permisos de Nexus.
     return await enrollmentService.canUseAtlas(user.id, courseId);
@@ -42,19 +42,19 @@ La fábrica guarda el JWT completo de aplicación exclusivamente en memoria del 
 
 ```html
 <iframe id="atlas" title="Atlas Psicología"
- src="https://odsanchezuniversitaria-web.github.io/Atlas-Psicologia-Web/"
+ src="https://softwarevalle75-wq.github.io/Atlas-Psicologia-Web/"
  allow="microphone; autoplay; xr-spatial-tracking; fullscreen"
  allowfullscreen></iframe>
 ```
 
-La URL es el destino preparado; el repositorio de entrega permanece privado y Pages todavía debe publicarse en la cuenta/dominio definitivo del colaborador.
+El iframe apunta a Atlas publicado. El portal autenticado debe abrir el iframe para habilitar la voz.
 
 ```js
 import {attachAtlas} from './atlas-host.mjs';
 
 const atlas = attachAtlas({
   iframe: document.getElementById('atlas'),
-  atlasUrl: 'https://odsanchezuniversitaria-web.github.io/Atlas-Psicologia-Web/',
+  atlasUrl: 'https://softwarevalle75-wq.github.io/Atlas-Psicologia-Web/',
   sessionEndpoint: '/api/courses/ID_DEL_CURSO/atlas/session',
   getCsrfToken: () => nexusSession.csrfToken,
   onError: error => showAtlasError(error.message),
@@ -76,7 +76,7 @@ El backend de Atlas permite los orígenes actuales en `/api/v1/atlas/`. Al cambi
 Además del atributo `allow` del iframe, si Nexus envía cabeceras restrictivas, incluir el origen del player en Permissions-Policy y CSP:
 
 ```text
-Permissions-Policy: microphone=(self "https://odsanchezuniversitaria-web.github.io"), autoplay=(self "https://odsanchezuniversitaria-web.github.io"), xr-spatial-tracking=(self "https://odsanchezuniversitaria-web.github.io")
+Permissions-Policy: microphone=(self "https://softwarevalle75-wq.github.io"), autoplay=(self "https://softwarevalle75-wq.github.io"), xr-spatial-tracking=(self "https://softwarevalle75-wq.github.io")
 ```
 
 Añadir ese origen a la directiva `frame-src` ya existente. No reemplazar toda la CSP por un ejemplo. El alumno debe permitir el micrófono y pulsar Comenzar/Hablar si el navegador requiere interacción para audio. WebVR funciona con HTTPS y navegador compatible del visor.

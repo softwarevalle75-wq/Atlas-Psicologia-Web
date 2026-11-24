@@ -16,7 +16,7 @@ RESPONSABILIDADES DE NEXUS
    y un identificador
    opaco de perfil. El cliente lo conserva en memoria, no en localStorage.
 4. ATLAS_WEB_ORIGINS autoriza únicamente las rutas Atlas. Incluye por defecto
-   https://odsanchezuniversitaria-web.github.io y los dominios actuales.
+   https://softwarevalle75-wq.github.io y los dominios actuales.
    Producción verificada el 18/11/2026: preflight 204 para Pages, 403 para
    dominios ajenos y 401 al solicitar una sesión sin autenticación.
    Al cambiar la cuenta de Pages, configurar la lista completa de orígenes.
