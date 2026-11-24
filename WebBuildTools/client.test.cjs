@@ -2,10 +2,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {JSDOM}=require('jsdom');
 const dir=path.resolve(__dirname,'../Assets/WebGLTemplates/AtlasNexus');
-function fixture(t,mobile=false){
- const dom=new JSDOM(fs.readFileSync(path.join(dir,'index.html'),'utf8'),{url:'https://example.github.io/Atlas/',runScripts:'outside-only'}),w=dom.window;
+function fixture(t,mobile=false,options={}){
+ const dom=new JSDOM(fs.readFileSync(path.join(dir,'index.html'),'utf8'),{url:'https://example.github.io/Atlas/'+(options.hash||''),runScripts:'outside-only'}),w=dom.window;
  t.after(()=>w.close());w.matchMedia=()=>({matches:mobile});w.structuredClone=structuredClone;w.requestAnimationFrame=f=>f();
- const sent=[],unity=[];const host={postMessage:(value,origin)=>sent.push({value,origin})};Object.defineProperty(w,'parent',{value:host});
+ const sent=[],unity=[];const host={postMessage:(value,origin)=>sent.push({value,origin})};if(!options.topLevel)Object.defineProperty(w,'parent',{value:host});w.fetch=options.fetch;w.AbortSignal=AbortSignal;
  w.ATLAS_CONFIG={apiBaseUrl:'https://api.example/api/v1/atlas',nexusOrigins:['https://nexus.example']};
  w.eval(fs.readFileSync(path.join(dir,'atlas-client.js'),'utf8'));w.AtlasApp.bind({SendMessage:(target,method,payload)=>unity.push({target,method,value:JSON.parse(payload)})});w.AtlasApp.ready('AtlasWeb');
  const session=(profileId='student-a')=>({type:'atlas:session',version:1,accessToken:'fixture-not-a-real-credential-xxxxxxxx',profileId,expiresAt:Date.now()+600000});
@@ -60,4 +60,46 @@ test('Celular conserva el panel elegido, abre las fichas y libera los gestos al 
  receive({patientOpen:true});assert.equal(get('touch-studybar').hidden,true);assert.equal(get('joystick').hidden,false);
  receive({});assert.equal(get('panel').hidden,true);assert.equal(get('joystick').hidden,true);
  assert.equal(unity.filter(x=>x.method==='TouchGesture'&&x.value.kind==='enable').length,2);
+});
+function privatePass(overrides={}){
+ const claims={role:'atlas_web',aud:'atlas-web',profile_id:'qa-voice',origin:'https://example.github.io',exp:Math.floor(Date.now()/1000)+600,...overrides};
+ return 'fixture.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.testsignature';
+}
+test('An access link clears the fragment and only enables voice after the server validates it',async t=>{
+ const token=privatePass();
+ let finish;
+ const f=fixture(t,true,{hash:'#atlas_voice='+token,topLevel:true,fetch:(url,options)=>{
+  assert.equal(url,'https://api.example/api/v1/atlas/health');
+  assert.equal(options.headers.Authorization,'Bearer '+token);
+  assert.equal(options.credentials,'omit');
+  assert.equal(options.redirect,'error');
+  return new Promise(resolve=>{finish=resolve;});
+ }});
+ assert.equal(f.w.location.hash,'');
+ assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');
+ finish({ok:true,status:200,json:async()=>({ready:true,livekit:{enabled:true},tts_configured:true})});
+ await tick();
+ assert.equal(f.w.document.getElementById('talk').textContent,'Mantén para hablar');
+ assert.equal(f.unity.at(-1).value.profileKey,'qa-voice');
+ for(let i=0;i<f.w.localStorage.length;i++)assert.ok(!f.w.localStorage.getItem(f.w.localStorage.key(i)).includes(token));
+ assert.equal(f.w.sessionStorage.length,0);
+});
+test('Access links reject app tokens, another origin, expired tokens, and embedded usage',async t=>{
+ let calls=0;
+ for(const [token,topLevel] of [[privatePass({role:'app'}),true],[privatePass({origin:'https://different.example'}),true],[privatePass({exp:0}),true],[privatePass(),false]]){
+  const f=fixture(t,true,{hash:'#atlas_voice='+token,topLevel,fetch:async()=>{calls++;}});
+  await tick();
+  assert.equal(f.w.location.hash,'');
+  assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');
+ }
+ assert.equal(calls,0);
+});
+test('A rejected access link or unavailable LiveKit cannot enable voice',async t=>{
+ for(const health of [{ok:false,status:401},{ok:true,status:200,json:async()=>({ready:true,livekit:{enabled:false}})}]){
+  const f=fixture(t,true,{hash:'#atlas_voice='+privatePass(),topLevel:true,fetch:async()=>health});
+  await tick();
+  assert.equal(f.w.location.hash,'');
+  assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');
+  assert.match(f.w.document.getElementById('speech-status').textContent,/acceso temporal|no está disponible/);
+ }
 });

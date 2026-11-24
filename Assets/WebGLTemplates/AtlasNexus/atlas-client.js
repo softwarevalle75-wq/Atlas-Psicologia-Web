@@ -3,6 +3,7 @@
 'use strict';const $=id=>document.getElementById(id),cfg=window.ATLAS_CONFIG||{};
 let unity=null,receiver='',state={},toastTimer=0,firstFrame=false,expectedLanding=null,selectedTab='systems',devPrevious=null;
 let voiceFailure='',touch=null,markTimer=0;
+let testAccess=false,testLinkStatus='';
 let accessToken='',profile='practice',expiresAt=0,expiryTimer=0,checkpoint=empty();
 const hostOrigins=new Set(cfg.nexusOrigins||[]),mobile=matchMedia('(pointer:coarse)').matches,input={moveX:0,moveY:0,lookX:0,lookY:0,x:.5,y:.5,talk:false,typing:false,ui:false};
 const text=(id,v)=>{if($(id)&&$(id).textContent!==String(v??''))$(id).textContent=String(v??'');};
@@ -12,30 +13,31 @@ function configuration(){return {apiBaseUrl:cfg.apiBaseUrl||'https://api.oscar-v
 function hasVoiceSession(){return !!accessToken&&Date.now()<expiresAt;}
 function voiceUI(){
  const enabled=hasVoiceSession();
- text('speech-status',enabled?(voiceFailure||state.status||'Conectando con el servicio de voz…'):'IA sin sesión de Nexus. La conversación no está habilitada; esto no indica un fallo del micrófono.');
+ text('speech-status',enabled?(voiceFailure||state.status||'Conectando con el servicio de voz…'):(testLinkStatus||'IA sin sesión de Nexus. La conversación no está habilitada; esto no indica un fallo del micrófono.'));
  text('voice-state',enabled?(voiceFailure?'Revisa el panel Asistente':state.talk?'Te escucho':state.speaking?(state.patientOpen?'María habla':'Atlas habla'):state.thinking?'Preparando respuesta…':'Mantén para hablar'):'IA sin sesión de Nexus');
  text('talk',enabled?'Mantén para hablar':'Probar micrófono');
  document.querySelector('[data-op="listen"]').disabled=!enabled;
  $('talk').classList.toggle('recording',enabled&&!!state.talk);
  if(!enabled)text('transcript','No se está enviando voz a la IA. Abre desde una sesión válida de Nexus. Puedes comprobar el micrófono con la prueba local de abajo.');
 }
-function configure(){emit('Configure',configuration());voiceUI();text('profile-label',devPrevious?'Modo de pruebas':accessToken?'Nexus · voz vinculada':'Práctica local · IA sin sesión');text('session-help',accessToken?'Nexus habilitó la voz de Atlas y María.':'Puedes explorar y guardar tu avance. La conversación con Atlas y María requiere una sesión de Nexus; el botón Probar micrófono sólo comprueba tu dispositivo.');$('logout').hidden=!accessToken;}
+function configure(){emit('Configure',configuration());voiceUI();text('profile-label',devPrevious?'Modo de pruebas':testAccess?'Prueba privada · voz habilitada':accessToken?'Nexus · voz vinculada':'Práctica local · IA sin sesión');text('session-help',testAccess?'El acceso temporal está activo. Entra en la entrevista y mantén pulsado Hablar para conversar con María.':accessToken?'Nexus habilitó la voz de Atlas y María.':(testLinkStatus||'Puedes explorar y guardar tu avance. Para conversar con Atlas o María, abre la aplicación desde Nexus o usa un enlace privado de prueba.'));$('logout').hidden=!accessToken;}
 function toast(message){text('toast',message);$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500);}
 function error(message){toast(message);if(!firstFrame)text('loading-text',message);}
 function draftKey(){return 'atlas.psicologia.progress.v1.'+profile;}
 function readDraft(){try{const v=JSON.parse(localStorage.getItem(draftKey())||'null');return v?.schemaVersion===1?v:empty();}catch{return empty();}}
 function notify(type,payload){const message={type,version:1,profileId:profile,...payload};for(const origin of hostOrigins){if(window.parent!==window)window.parent.postMessage(message,origin);if(window.opener)window.opener.postMessage(message,origin);}window.dispatchEvent(new CustomEvent(type,{detail:message}));}
 function save(value){if(!value||value.schemaVersion!==1)return;checkpoint=structuredClone(value);try{localStorage.setItem(draftKey(),JSON.stringify(checkpoint));text('sync','Avance guardado en este navegador');}catch{text('sync','No se pudo guardar el avance local');}if(accessToken&&!devPrevious)notify('atlas:progress',{checkpoint});}
-async function connect(value){
+async function connect(value,source='nexus'){
  if(!value||typeof value.accessToken!=='string'||value.accessToken.length<32||value.accessToken.length>8192||!Number.isFinite(value.expiresAt)||value.expiresAt<=Date.now())throw new Error('Nexus debe entregar un acceso de voz temporal válido.');
  if(typeof value.profileId!=='string'||!/^[-_a-zA-Z0-9]{1,100}$/.test(value.profileId))throw new Error('Nexus debe entregar un identificador de perfil válido.');
  const changed=profile!==value.profileId;if(changed){save(checkpoint);await window.AtlasVoice?.closeAll();}
  if(window.AtlasMicrophone?.isTesting())window.AtlasMicrophone.stop('Prueba finalizada al activar la voz de Nexus.');voiceFailure='';
  accessToken=value.accessToken;expiresAt=Math.min(value.expiresAt,Date.now()+3600000);profile=value.profileId;devPrevious=null;
- checkpoint=value.checkpoint?.schemaVersion===1?structuredClone(value.checkpoint):readDraft();clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>{logout();notify('atlas:session-required',{});toast('El acceso de voz terminó. Abre de nuevo Atlas desde Nexus.');},expiresAt-Date.now());
+ testAccess=source==='test';testLinkStatus='';
+ checkpoint=value.checkpoint?.schemaVersion===1?structuredClone(value.checkpoint):readDraft();clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>{const expiredTest=testAccess;logout();if(!expiredTest)notify('atlas:session-required',{});toast(expiredTest?'Terminó la prueba de voz. Usa un enlace de prueba nuevo.':'El acceso de voz terminó. Abre de nuevo Atlas desde Nexus.');},expiresAt-Date.now());
  if(changed&&unity&&!state.landing)command('home');configure();notify('atlas:connected',{});
 }
-async function logout(){voiceFailure='';save(checkpoint);await window.AtlasVoice?.closeAll();accessToken='';expiresAt=0;clearTimeout(expiryTimer);profile='practice';devPrevious=null;checkpoint=readDraft();if(unity&&!state.landing)command('home');configure();}
+async function logout(){voiceFailure='';save(checkpoint);await window.AtlasVoice?.closeAll();accessToken='';expiresAt=0;testAccess=false;clearTimeout(expiryTimer);profile='practice';devPrevious=null;checkpoint=readDraft();if(unity&&!state.landing)command('home');configure();}
 async function api(route,payload={}){
  if(!accessToken||Date.now()>=expiresAt)throw new Error('Abre Atlas desde Nexus para habilitar la voz.');
  if(!['/health','/speech','/livekit/session','/patient/feedback'].includes(route))throw new Error('Operación no disponible.');
@@ -157,10 +159,47 @@ $('send-report').addEventListener('click',()=>{
  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='atlas-resultados.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);text('report-status','Resultados exportados.');
 });
 $('developer').addEventListener('click',async()=>{
- await window.AtlasVoice?.closeAll();if(!devPrevious){save(checkpoint);devPrevious={accessToken,profile,checkpoint:structuredClone(checkpoint),expiresAt};accessToken='';profile='developer';checkpoint=readDraft();$('developer').textContent='Salir del modo de pruebas';}
- else{({accessToken,profile,checkpoint,expiresAt}=devPrevious);devPrevious=null;$('developer').textContent='Modo de pruebas separado';}
+ await window.AtlasVoice?.closeAll();if(!devPrevious){save(checkpoint);devPrevious={accessToken,profile,checkpoint:structuredClone(checkpoint),expiresAt,testAccess};testAccess=false;accessToken='';profile='developer';checkpoint=readDraft();$('developer').textContent='Salir del modo de pruebas';}
+ else{({accessToken,profile,checkpoint,expiresAt,testAccess}=devPrevious);devPrevious=null;$('developer').textContent='Modo de pruebas separado';}
  if(unity&&!state.landing)command('home');configure();
 });
+async function openTestLink(){
+ const prefix='#atlas_voice=';
+ if(!location.hash.startsWith(prefix))return;
+ const token=location.hash.slice(prefix.length);
+ history.replaceState(history.state,'',location.pathname+location.search);
+ if(window.parent!==window)return;
+
+ const invalid='El acceso temporal no es válido o ya venció. Pide un enlace de prueba nuevo.';
+ let claims;
+ try{
+  if(token.length>8192||!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token))throw new Error();
+  const encoded=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+  claims=JSON.parse(atob(encoded));
+  const now=Math.floor(Date.now()/1000);
+  if(claims.role!=='atlas_web'||claims.aud!=='atlas-web'||claims.origin!==location.origin||
+   typeof claims.profile_id!=='string'||!/^[-_a-zA-Z0-9]{1,100}$/.test(claims.profile_id)||
+   !Number.isSafeInteger(claims.exp)||claims.exp<=now||claims.exp>now+660)throw new Error();
+ }catch{
+  testLinkStatus=invalid;configure();return;
+ }
+
+ testLinkStatus='Validando el acceso de voz temporal…';configure();
+ try{
+  const url=configuration().apiBaseUrl.replace(/\/$/,'')+'/health';
+  const response=await fetch(url,{headers:{Authorization:'Bearer '+token},credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
+  if(response.status===401||response.status===403){testLinkStatus=invalid;configure();return;}
+  if(!response.ok)throw new Error();
+  const health=await response.json();
+  if(!health.ready||!health.livekit?.enabled||health.tts_configured===false)throw new Error();
+  await connect({accessToken:token,profileId:claims.profile_id,expiresAt:claims.exp*1000},'test');
+ }catch{
+  testLinkStatus='El servicio de voz no está disponible en este momento. Vuelve a abrir el enlace original para reintentar.';
+  configure();
+ }
+}
+
 window.AtlasApp={voiceError:message=>{voiceFailure=message;voiceUI();},bind:instance=>{unity=instance;window.unityInstance=instance;configure();},ready:name=>{receiver=name;configure();},receive,save,error,command,connect,logout,haptic:()=>{},api};
+void openTestLink();
 checkpoint=readDraft();tab('systems');configure();notify('atlas:ready',{});if(navigator.xr)navigator.xr.isSessionSupported('immersive-vr').then(ok=>{$('vr').hidden=!ok;}).catch(()=>{});
 })();
