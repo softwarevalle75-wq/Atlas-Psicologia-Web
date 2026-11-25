@@ -4,6 +4,11 @@ const root=path.resolve(process.argv[2]||path.join(__dirname,'../Builds/AtlasPag
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 if(html.includes('{{{')||html.includes('gatewayUrl')||html.includes('labKey'))throw Error('El build contiene una plantilla sin compilar o configuración retirada.');
 for(const file of ['atlas-client.js','atlas-voice.js','atlas-config.js','livekit-client.js','atlas.css'].concat(html.includes('atlas-microphone.js')?['atlas-microphone.js']:[],html.includes('atlas-touch.js')?['atlas-touch.js']:[]))if(!fs.statSync(path.join(root,file)).size)throw Error('Falta '+file);
+if (html.includes('href="seleccion/"')) {
+ const level = ['index.html','seleccion.css','profiles.js','evaluacion.js','seleccion.js','office.webp'];
+ for (const file of level) if (!fs.statSync(path.join(root,'seleccion',file)).size) throw Error('Falta selección laboral: '+file);
+}
+
 const files=[];function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory())walk(full);else{const bytes=fs.readFileSync(full);if(bytes.subarray(0,45).toString().startsWith('version https://git-lfs.github.com/spec'))throw Error('Puntero LFS sin descargar: '+full);files.push({path:path.relative(root,full).replaceAll('\\','/'),bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')});}}}walk(root);
 for(const suffix of ['.loader.js','.framework.js.unityweb','.wasm.unityweb','.data.unityweb'])if(!files.some(f=>f.path.endsWith(suffix)))throw Error('Falta el recurso '+suffix);
 const total=files.reduce((n,f)=>n+f.bytes,0);if(total>1024**3)throw Error('El build supera 1 GiB.');

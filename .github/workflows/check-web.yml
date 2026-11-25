@@ -18,6 +18,6 @@ jobs:
       cache-dependency-path: WebBuildTools/package-lock.json
    - run: npm ci --no-audit --no-fund
      working-directory: WebBuildTools
-   - run: node --test client.test.cjs voice.test.cjs microphone.test.cjs touch.test.cjs
+   - run: node --test client.test.cjs voice.test.cjs microphone.test.cjs touch.test.cjs seleccion.test.cjs
      working-directory: WebBuildTools
    - run: node --test NexusIntegration/atlas-session.test.mjs

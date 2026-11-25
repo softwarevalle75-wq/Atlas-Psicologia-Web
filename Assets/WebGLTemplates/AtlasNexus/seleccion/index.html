@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#101c21">
+  <meta name="description" content="Practica una entrevista laboral y revisa evidencias frente al perfil de INNOVARQ.">
+  <title>Selección laboral · Atlas</title>
+  <link rel="stylesheet" href="seleccion.css">
+  <script src="profiles.js" defer></script>
+  <script src="evaluacion.js" defer></script>
+  <script src="seleccion.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workbench">Ir al contenido</a>
+  <header class="topbar">
+    <a class="atlas-mark" href="../">Atlas</a>
+    <span class="topbar-divider" aria-hidden="true"></span>
+    <span class="topbar-title">Selección laboral</span>
+  </header>
+
+  <main class="stage">
+    <figure class="office" aria-label="Oficina de entrevistas de INNOVARQ">
+      <img class="office-image" src="office.webp" alt="Entrevistador sentado frente al escritorio en una oficina de INNOVARQ" fetchpriority="high">
+      <figcaption class="office-caption">
+        <span class="office-caption-marker" aria-hidden="true"></span>
+        <span>Entrevistador · INNOVARQ</span>
+      </figcaption>
+    </figure>
+
+    <div id="workbench" class="workbench" tabindex="-1">
+      <nav class="view-nav" aria-label="Áreas de la simulación">
+        <button type="button" class="view-button" data-view="interview" aria-controls="interview" aria-pressed="true">Entrevista</button>
+        <button type="button" class="view-button" data-view="resume" aria-controls="resume" aria-pressed="false">Hoja de vida</button>
+        <button type="button" class="view-button" data-view="compare" aria-controls="compare" aria-pressed="false">Comparar</button>
+      </nav>
+
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+      <section id="interview" class="view" aria-label="Entrevista">
+        <section id="setup" class="flow">
+          <h1>Entrevista de selección</h1>
+          <p class="lede">Elige el cargo al que quieres postularte. El entrevistador te presentará preguntas y situaciones del trabajo.</p>
+          <div class="field">
+            <label for="cargo">Cargo</label>
+            <select id="cargo"></select>
+          </div>
+          <div id="profile-meta" class="profile-meta"></div>
+          <div class="actions">
+            <button id="begin" type="button" class="button button-primary">Comenzar entrevista</button>
+          </div>
+        </section>
+
+        <section id="interview-flow" class="flow" aria-label="Pregunta de entrevista" hidden>
+          <div class="question-meta">
+            <p id="question-step"></p>
+            <p id="question-skill"></p>
+          </div>
+          <h2 id="question-title" class="question-title" tabindex="-1"></h2>
+          <button id="hear" type="button" class="button button-text">Leer pregunta</button>
+          <div id="options" class="answer-list" role="group" aria-labelledby="question-title"></div>
+          <div id="open-area" class="field" hidden>
+            <label for="open-answer">Tu respuesta</label>
+            <textarea id="open-answer" rows="6" placeholder="Cuenta qué hiciste y qué resultado obtuviste."></textarea>
+          </div>
+          <div class="actions">
+            <button id="next" type="button" class="button button-primary">Continuar</button>
+          </div>
+        </section>
+
+        <section id="results" class="flow" aria-label="Resultados de la entrevista" hidden>
+          <h2 tabindex="-1">Resultados de tu entrevista</h2>
+          <div id="scorecards" class="score-grid"></div>
+          <div id="answer-review" class="review-list"></div>
+          <div class="actions">
+            <button id="repeat" type="button" class="button button-primary">Nueva entrevista</button>
+            <button id="compare-now" type="button" class="button button-secondary">Comparar resultados</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="resume" class="view flow" hidden>
+        <h1>Revisar hoja de vida</h1>
+        <p class="lede">Contrasta la formación y la experiencia con el perfil del cargo. Usa un ejemplo ficticio o texto sin datos de identificación.</p>
+        <div class="field">
+          <label for="resume-cargo">Cargo</label>
+          <select id="resume-cargo"></select>
+        </div>
+        <div class="field">
+          <label for="resume-text">Formación y experiencia</label>
+          <textarea id="resume-text" rows="8" maxlength="20000" placeholder="Pega aquí los estudios, la experiencia, las herramientas y los proyectos relevantes."></textarea>
+        </div>
+        <div class="field-pair">
+          <div class="field">
+            <label for="resume-years">Años relevantes verificados</label>
+            <input id="resume-years" type="number" inputmode="decimal" min="0" max="70" step=".5" placeholder="Opcional">
+          </div>
+          <div class="field">
+            <label for="resume-education">Formación verificada</label>
+            <select id="resume-education">
+              <option value="">Sin verificar</option>
+              <option value="yes">Cumple</option>
+              <option value="no">Pendiente de cumplir</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="analyze" type="button" class="button button-primary">Analizar hoja de vida</button>
+          <button id="example-cv" type="button" class="button button-secondary">Cargar ejemplo</button>
+        </div>
+        <div id="resume-output" class="resume-output" aria-live="polite"></div>
+      </section>
+
+      <section id="compare" class="view flow" hidden>
+        <h1>Comparar resultados</h1>
+        <p class="lede">Revisa las evidencias y puntuaciones de prácticas realizadas para el mismo cargo.</p>
+        <div class="field">
+          <label for="compare-cargo">Cargo</label>
+          <select id="compare-cargo"></select>
+        </div>
+        <div class="actions">
+          <button id="sample-data" type="button" class="button button-secondary">Cargar resultados de ejemplo</button>
+        </div>
+        <div id="comparison" aria-live="polite"></div>
+        <p class="hint">Los resultados de práctica se guardan en este navegador. Usa casos ficticios para la comparación.</p>
+      </section>
+
+      <footer class="workbench-footer">
+        <details>
+          <summary>Referencias y metodología</summary>
+          <p>La entrevista usa preguntas del cargo, ejercicios de trabajo y criterios comunes para comparar evidencias.</p>
+          <ul>
+            <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/" target="_blank" rel="noopener noreferrer">Entrevistas estructuradas, OPM</a></li>
+            <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/work-samples-and-simulations/" target="_blank" rel="noopener noreferrer">Muestras de trabajo y simulaciones, OPM</a></li>
+            <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/situational-judgment-tests/" target="_blank" rel="noopener noreferrer">Ejercicios de juicio situacional, OPM</a></li>
+            <li><a href="https://incuvia.com/wp-content/uploads/2022/10/Chiavenato-Idalberto-2009-Comportamiento-organizacional-2-Ed.pdf" target="_blank" rel="noopener noreferrer">Comportamiento organizacional, Chiavenato</a></li>
+            <li><a href="https://jgestiondeltalentohumano.wordpress.com/wp-content/uploads/2013/11/gestion-del-talento-humano-idalberto-chiavenato-3th.pdf" target="_blank" rel="noopener noreferrer">Gestión del talento humano, Chiavenato</a></li>
+          </ul>
+        </details>
+      </footer>
+    </div>
+  </main>
+  <noscript>Activa JavaScript para realizar la entrevista y comparar los ejercicios.</noscript>
+</body>
+</html>
