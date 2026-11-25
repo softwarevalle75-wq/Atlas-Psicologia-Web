@@ -6,7 +6,7 @@
   const openRubric = window.AtlasOpenResponse;
   const byId = id => document.getElementById(id);
   const storageKey = 'atlas.innovarq.practice.v1';
-  const groupNames = {hard: 'Habilidades técnicas', soft: 'Habilidades interpersonales'};
+  const groupNames = {hard: 'Habilidades técnicas', soft: 'Habilidades interpersonales', open: 'Experiencia aplicada'};
   const profileFor = select => profiles.find(profile => profile.id === byId(select).value) || profiles[0];
   let interview;
   let demoVisible = false;
@@ -75,24 +75,8 @@
   function receiveTranscript(raw) {
     if (view === 'interview' && pilot.receiveTranscript(raw)) return;
     if (!interview || interview.entry || view !== 'interview') return;
-    if (!current()) {
-      const field = byId('open-answer');
-      field.value = (field.value.trim() + ' ' + raw).trim().slice(0, 2400);
-      return;
-    }
-    const answer = raw.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9 ]/g, '').trim();
-    const choices = {a: 0, primera: 0, uno: 0, 1: 0, b: 1, be: 1, segunda: 1, dos: 1, 2: 1, c: 2, ce: 2, tercera: 2, tres: 2, 3: 2};
-    const parsed = answer.match(/^(?:(?:elijo |marco )?(?:la )?(?:opcion )?)?(a|b|be|c|ce|primera|segunda|tercera|uno|dos|tres|1|2|3)$/);
-    const index = parsed ? choices[parsed[1]] : undefined;
-    if (index == null) {
-      notice('Entendí «' + raw + '». Di «opción A», «opción B» o «opción C», o toca la respuesta.');
-      return;
-    }
-    const input = byId('options').querySelectorAll('input')[index];
-    if (input) {
-      input.checked = true;
-      notice('Marqué la opción ' + 'ABC'[index] + '. Confirma con Continuar.');
-    }
+    const field = byId('open-answer');
+    field.value = (field.value.trim() + ' ' + raw).trim().slice(0, field.maxLength);
   }
 
   function element(tag, text, className) {
@@ -110,19 +94,32 @@
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) || '[]');
       if (!Array.isArray(value)) return [];
-      return value.filter(item => item && /^Candidato \d+$/.test(item.name) &&
-        profiles.some(profile => profile.id === item.role) &&
-        item.answers && typeof item.answers === 'object').slice(-100);
+      return value.filter(item => {
+        if (!item || !/^Candidato \d+$/.test(item.name)) return false;
+        const profile = profiles.find(profile => profile.id === item.role);
+        if (!profile) return false;
+        return item.conversation ? Boolean(evaluate.scoreConversation(profile, item.conversation)) :
+          Boolean(item.answers && typeof item.answers === 'object');
+      }).slice(-100);
     } catch {
       return [];
     }
   }
 
-  function addAttempt(profile, answers, assessment) {
+  function addAttempt(profile, records) {
     const saved = readAttempts();
     if (saved.length) attempts = saved;
     const max = attempts.reduce((number, item) => Math.max(number, Number(item.name.slice(10)) || 0), 0);
-    const entry = {name: 'Candidato ' + String(max + 1).padStart(2, '0'), role: profile.id, answers: {...answers}, open: openRubric.summarize(assessment)};
+    const evidence = Object.fromEntries(records.map(({question, assessment}) => [question.id, openRubric.summarize(assessment)]));
+    const entry = {
+      name: 'Candidato ' + String(max + 1).padStart(2, '0'),
+      role: profile.id,
+      conversation: {
+        version: evaluate.CONVERSATION_VERSION,
+        answered: records.filter(record => record.turns.length > 0).length,
+        evidence,
+      },
+    };
     attempts = [...attempts, entry].slice(-100);
     try {
       localStorage.setItem(storageKey, JSON.stringify(attempts));
@@ -158,9 +155,7 @@
   function showProfile() {
     const profile = profileFor('cargo');
     byId('pilot-intro').hidden = profile.id !== pilotRole;
-    byId('begin').textContent = profile.id === pilotRole ? 'Practicar la entrevista general' : 'Comenzar entrevista';
-    byId('begin').classList.toggle('button-primary', profile.id !== pilotRole);
-    byId('begin').classList.toggle('button-secondary', profile.id === pilotRole);
+    byId('begin').hidden = profile.id === pilotRole;
     const meta = byId('profile-meta');
     meta.replaceChildren(
       element('p', profile.objective),
@@ -170,108 +165,82 @@
   }
 
   function startInterview() {
-    interview = {profile: profileFor('cargo'), next: 0, answers: Object.create(null), openAnswers: [], followUps: [], assessment: null, entry: null};
+    const profile = profileFor('cargo');
+    if (profile.id === pilotRole) return;
+    interview = {profile, questions: evaluate.conversationQuestions(profile), next: 0, records: [], turns: [], followUps: [], entry: null};
     byId('setup').hidden = true;
     byId('results').hidden = true;
     byId('interview-flow').hidden = false;
     document.body.classList.add('interview-active');
     byId('open-answer').value = '';
-    renderQuestion(true);
+    renderQuestion();
   }
 
   function current() {
-    return interview.profile.questions[interview.next];
+    return interview.questions[interview.next];
   }
 
-  function renderQuestion(readAloud) {
-    const {profile, next, followUps} = interview;
+  function renderQuestion() {
+    const {questions, next, followUps} = interview;
     const question = current();
     const follow = followUps.at(-1);
     const title = byId('question-title');
-    byId('question-step').textContent = question ? 'Ejercicio ' + (next + 1) + ' de ' + profile.questions.length :
-      follow ? 'Repregunta ' + followUps.length : 'Entrevista abierta';
-    byId('question-skill').textContent = question ? groupNames[question.group] + ' · ' + question.skill :
-      follow ? 'Profundizar en tu respuesta' : 'Respuesta abierta · 4 puntos posibles';
-    title.textContent = question?.prompt || follow?.text || profile.open.prompt;
-    byId('next').textContent = question ? 'Continuar' : 'Enviar respuesta';
-    byId('open-area').hidden = !!question;
-    byId('skip-open').hidden = !!question;
-    byId('voice-hint').textContent = !voice.canListen ?
-      'El dictado depende del navegador. También puedes responder con los controles de la pantalla.' :
-      question ? 'Di «opción A», «opción B» u «opción C», o toca una opción. El navegador puede procesar el audio en línea.' :
-      'Dicta tu respuesta y revisa la transcripción antes de enviarla. El navegador puede procesar el audio en línea.';
-    const wrapper = byId('options');
-    wrapper.hidden = !question;
-    wrapper.replaceChildren();
-    if (question) {
-      question.options.forEach((option, index) => {
-        const label = element('label', null, 'answer-option');
-        const radio = element('input');
-        radio.type = 'radio';
-        radio.name = 'answer';
-        radio.value = String(index);
-        radio.addEventListener('change', () => notice(''));
-        label.append(radio, element('span', 'ABC'[index] + '. ' + option.text));
-        wrapper.append(label);
-      });
-    }
+    const progress = 'Pregunta ' + (next + 1) + ' de ' + questions.length;
+    byId('question-step').textContent = follow ? progress + ' · Repregunta ' + followUps.length : progress;
+    byId('question-skill').textContent = question.group === 'open' ? question.skill :
+      groupNames[question.group] + ' · ' + question.skill;
+    title.textContent = follow?.text || question.prompt;
+    byId('voice-hint').textContent = voice.canListen ?
+      'Habla o escribe con tus propias palabras. Si dictas, puedes corregir la transcripción antes de enviarla.' :
+      'El dictado no está disponible en este navegador. Escribe tu respuesta.';
     notice('');
     title.focus();
-    if (readAloud) readQuestion(false);
+    readQuestion();
   }
 
-  function readQuestion(includeOptions) {
+  function readQuestion() {
     if (!voice.canSpeak || view !== 'interview' || !interview || interview.entry) return;
-    const question = current();
-    let text = byId('question-title').textContent;
-    if (includeOptions && question) {
-      text += ' ' + question.options.map((option,index) => 'Opción ' + 'ABC'[index] + '. ' + option.text).join(' ');
-    }
-    voice.speak(text);
+    voice.speak(byId('question-title').textContent);
   }
 
   function finishInterview() {
     if (interview.entry) return;
-    const texts = interview.openAnswers.map(item => item.text);
-    interview.assessment = openRubric.assess(interview.profile, texts);
-    interview.entry = addAttempt(interview.profile, interview.answers, interview.assessment);
+    voice.cancel();
+    interview.entry = addAttempt(interview.profile, interview.records);
     animateFeedback('acknowledge');
     renderResults();
   }
 
-  function advance() {
+  function advance(skip = false) {
     if (!interview || interview.entry || listening) return;
-    const question = current();
-    if (question) {
-      const radio = byId('options').querySelector('input:checked');
-      if (!radio) {
-        notice('Elige una respuesta para continuar.');
-        byId('options').querySelector('input')?.focus();
-        return;
-      }
-      interview.answers[question.id] = Number(radio.value);
-      interview.next++;
-      renderQuestion(true);
-      return;
-    }
     const field = byId('open-answer');
     const text = field.value.trim();
-    if (!text) {
-      notice('Escribe o dicta tu respuesta. También puedes omitir esta pregunta.');
+    if (!skip && !text) {
+      notice('Escribe o dicta tu respuesta para continuar.');
       field.focus();
       return;
     }
-    interview.openAnswers.push({prompt: byId('question-title').textContent, text});
     field.value = '';
-    const follow = openRubric.followUp(interview.profile, interview.openAnswers.map(item => item.text), interview.followUps.map(item => item.id));
+    if (!skip) interview.turns.push({prompt: byId('question-title').textContent, text});
+    const question = current();
+    const answers = interview.turns.map(turn => turn.text);
+    const hypothetical = question.group !== 'open';
+    const limit = hypothetical ? 1 : openRubric.MAX_FOLLOW_UPS;
+    const follow = !skip && interview.followUps.length < limit ?
+      openRubric.followUp(interview.profile, answers, interview.followUps.map(item => item.id), {prompt: question.prompt, hypothetical}) : null;
     if (follow) {
       interview.followUps.push(follow);
       animateFeedback('thinking');
-      renderQuestion(true);
+      renderQuestion();
       return;
     }
-    voice.cancel();
-    finishInterview();
+    const assessment = openRubric.assess(interview.profile, answers, question.prompt);
+    interview.records.push({question, turns: interview.turns, assessment});
+    interview.turns = [];
+    interview.followUps = [];
+    interview.next++;
+    if (current()) renderQuestion();
+    else finishInterview();
   }
 
   function scorecard(label, result) {
@@ -289,39 +258,41 @@
   function writeReview(summary) {
     const review = byId('answer-review');
     review.replaceChildren(element('h3', 'Retroalimentación'));
-    for (const {question, option} of summary.items) {
+    review.append(element('p', 'Revisa las respuestas y sus evidencias antes de interpretar el puntaje.', 'hint'));
+    if (!summary.completed) {
+      review.append(element('p', 'Responde todas las preguntas principales para incluir esta entrevista en la comparación.', 'hint'));
+    }
+    for (const {question, turns, assessment} of interview.records) {
       const item = element('article', null, 'review-item');
-      item.append(element('h4', question.skill), element('p', option.text),
-        element('p', option.points + '/2 · ' + option.note, 'hint'));
+      item.append(element('h4', question.skill + ' · ' + assessment.points + '/' + assessment.max));
+      for (const turn of turns) {
+        item.append(element('p', turn.prompt, 'hint'), element('blockquote', turn.text));
+      }
+      if (!turns.length) {
+        item.append(element('p', question.prompt), element('p', 'Pregunta omitida.', 'hint'));
+      } else {
+        const list = element('ul', null, 'evidence-list');
+        for (const criterion of assessment.criteria) {
+          const row = element('li');
+          row.append(element('strong', criterion.label), element('span', criterion.evidence || 'Por confirmar en la revisión.'));
+          list.append(row);
+        }
+        item.append(list);
+      }
       review.append(item);
     }
-    const open = element('article', null, 'review-item');
-    open.append(element('h4', 'Evidencia de las respuestas abiertas'));
-    for (const item of interview.openAnswers) {
-      open.append(element('p', item.prompt, 'hint'), element('blockquote', item.text));
-    }
-    if (!interview.openAnswers.length) open.append(element('p', 'Sin respuestas abiertas registradas.', 'hint'));
-    const list = element('ul', null, 'evidence-list');
-    for (const criterion of interview.assessment.criteria) {
-      const row = element('li');
-      row.append(element('strong', (criterion.met ? '1/1 · ' : '0/1 · ') + criterion.label),
-        element('span', criterion.description + (criterion.evidence ? ' · Evidencia: ' + criterion.evidence : '')));
-      list.append(row);
-    }
-    open.append(list, element('p', 'El puntaje automático indica evidencia en el relato y puede ser revisado por el evaluador.', 'hint'));
-    review.append(open);
   }
 
   function renderResults() {
-    const summary = openRubric.combine(evaluate.score(interview.profile, interview.answers), interview.entry.open);
+    const summary = evaluate.scoreConversation(interview.profile, interview.entry.conversation);
     byId('interview-flow').hidden = true;
     document.body.classList.remove('interview-active');
     byId('results').hidden = false;
     byId('scorecards').replaceChildren(
-      scorecard('Resultado de la práctica', summary),
+      scorecard('Evidencia detectada', summary),
       scorecard(groupNames.hard, summary.groups.hard),
       scorecard(groupNames.soft, summary.groups.soft),
-      scorecard('Respuestas abiertas', {points:summary.open.points,max:summary.open.max,percent:Math.round(100*summary.open.points/summary.open.max)})
+      scorecard(groupNames.open, summary.open)
     );
     byId('compare-cargo').value = interview.profile.id;
     writeReview(summary);
@@ -379,10 +350,11 @@
     reviewResume();
   }
 
-  function comparisonTable(profile, list, title, empty, includesOpen) {
+  function comparisonTable(profile, list, title, empty, includesOpen, rate = entry =>
+    openRubric.combine(evaluate.score(profile, entry.answers || {}), entry.open)) {
     const wrapper = element('section', null, 'review-item');
     wrapper.append(element('h3', title));
-    const rows = evaluate.rank(profile, list, entry => openRubric.combine(evaluate.score(profile, entry.answers || {}), entry.open));
+    const rows = evaluate.rank(profile, list, rate);
     if (!rows.length) {
       wrapper.append(element('p', empty, 'empty'));
       return wrapper;
@@ -425,16 +397,23 @@
     byId('pilot-transfer').hidden = !hasPilot;
     if (hasPilot) pilot.renderComparison();
     const report = byId('comparison');
-    const currentAttempts = attempts.filter(entry => openRubric.isSummary(entry.open));
-    const older = attempts.filter(entry => entry.role === profile.id && !openRubric.isSummary(entry.open));
-    report.replaceChildren(comparisonTable(profile, currentAttempts, 'Entrevistas · 12 puntos posibles', 'Completa una entrevista para este cargo y repítela con otro participante para comparar.', true));
-    if (older.length) report.append(comparisonTable(profile, older, 'Historial · ejercicios de 8 puntos', '', false));
+    const forRole = attempts.filter(entry => entry.role === profile.id);
+    const conversations = forRole.filter(entry => entry.conversation);
+    const oldInterviews = forRole.filter(entry => !entry.conversation && openRubric.isSummary(entry.open));
+    const oldExercises = forRole.filter(entry => !entry.conversation && !openRubric.isSummary(entry.open));
+    report.replaceChildren();
+    if (!hasPilot) {
+      report.append(comparisonTable(profile, conversations, 'Entrevistas conversacionales', 'Completa una entrevista para este cargo y repítela con otro participante para comparar.', true,
+        entry => evaluate.scoreConversation(profile, entry.conversation)));
+    }
+    if (oldInterviews.length) report.append(comparisonTable(profile, oldInterviews, 'Historial · práctica anterior de 12 puntos', '', true));
+    if (oldExercises.length) report.append(comparisonTable(profile, oldExercises, 'Historial · ejercicios de 8 puntos', '', false));
     if (demoVisible) {
       const samples = evaluate.examples(profile).map((entry, index) => ({
         ...entry,
         open: {version: openRubric.VERSION, criteria: {context:true, action:true, result:index<2, verification:false}},
       }));
-      report.append(comparisonTable(profile, samples, 'Ejemplos ficticios · 12 puntos posibles', '', true));
+      report.append(comparisonTable(profile, samples, 'Ejemplos ficticios de la práctica anterior · 12 puntos posibles', '', true));
     }
   }
 
@@ -459,7 +438,7 @@
     notice('');
     pilot.start();
   });
-  byId('next').addEventListener('click', advance);
+  byId('next').addEventListener('click', () => advance());
   byId('compare-now').addEventListener('click', () => switchView('compare'));
   byId('repeat').addEventListener('click', () => {
     byId('cargo').value = interview.profile.id;
@@ -471,16 +450,13 @@
     byId('begin').focus();
   });
   byId('hear').disabled = !voice.canSpeak;
-  byId('hear').addEventListener('click', () => readQuestion(true));
+  byId('hear').addEventListener('click', readQuestion);
   byId('record-answer').disabled = !voice.canListen;
   byId('record-answer').addEventListener('click', () => {
     if (listening) voice.stop();
     else if (interview && !interview.entry && view === 'interview') voice.listen();
   });
-  byId('skip-open').addEventListener('click', () => {
-    voice.cancel();
-    if (interview && !interview.entry && !current()) finishInterview();
-  });
+  byId('skip-open').addEventListener('click', () => advance(true));
 
   byId('resume-cargo').addEventListener('change', () => {
     byId('resume-output').replaceChildren();

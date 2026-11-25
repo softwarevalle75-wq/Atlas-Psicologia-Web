@@ -22,7 +22,11 @@
       const answer = data.answers[item.id];
       if (!answer || typeof answer.main !== 'string' || typeof answer.followUp !== 'string' ||
           answer.main.length > 2400 || answer.followUp.length > 2400) throw new Error(invalid);
-      answers[item.id] = {main: answer.main, followUp: answer.followUp};
+      const {main, followUp, followUpPrompt} = answer;
+      if (followUpPrompt !== undefined && (typeof followUpPrompt !== 'string' ||
+          !followUpPrompt.trim() || followUpPrompt.length > 300 || /[\u0000-\u001f\u007f]/u.test(followUpPrompt))) throw new Error(invalid);
+      answers[item.id] = {main, followUp};
+      if (followUpPrompt !== undefined) answers[item.id].followUpPrompt = followUpPrompt;
     }
     return {version: rules.version, id: data.id.toLowerCase(), alias: data.alias.trim(),
       created: new Date(data.created).toISOString(), answers, reviews: {}};

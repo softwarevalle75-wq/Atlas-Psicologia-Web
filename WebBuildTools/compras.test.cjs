@@ -27,6 +27,24 @@ test('all three cases use anchored observations of the INNOVARQ procurement comp
   }
 });
 
+test('the same purchasing case asks a different follow-up based on the spoken or typed response', () => {
+  const [delay, offers, receiving] = pilot.cases;
+  assert.match(pilot.nextQuestion(delay, 'Llamaría a los dos proveedores.'), /cantidad pedirías/u);
+  assert.match(pilot.nextQuestion(delay, 'Adelantaría 30 kits y pediría 20 kits al proveedor homologado.'), /Cuánto costaría/u);
+  assert.match(pilot.nextQuestion(delay, 'Pediría 50 kits al proveedor homologado por 450.000 pesos adicionales.'), /confirmación pedirías/u);
+  assert.equal(pilot.nextQuestion(delay, 'Confirmaría antes del martes los 30 kits adelantados y 20 kits alternativos. El costo sería de $360.000.'), delay.followUp);
+
+  assert.match(pilot.nextQuestion(offers, 'Recomiendo la segunda oferta por sus condiciones.'), /costo total/u);
+  assert.match(pilot.nextQuestion(offers, 'Prefiero la oferta por 8,9 millones de pesos.'), /fecha y cantidad/u);
+  assert.match(pilot.nextQuestion(offers, 'Recomiendo 8,9 millones de pesos y confirmaría las entregas del lunes y jueves.'), /certificado corresponde/u);
+  assert.equal(pilot.nextQuestion(offers, 'Recomiendo 8,9 millones de pesos. Confirmo la entrega del lunes y verifico el certificado del lote.'), offers.followUp);
+
+  assert.match(pilot.nextQuestion(receiving, 'Haría un llamado urgente.'), /Cuántas válvulas/u);
+  assert.match(pilot.nextQuestion(receiving, 'Hay 100 válvulas conformes. No pongo disponibles las dañadas.'), /qué comunicarías/iu);
+  assert.match(pilot.nextQuestion(receiving, 'Hay 100 válvulas conformes. Coordino el recuento con bodega, el pago con finanzas y el despacho con obra.'), /qué registrarías/iu);
+  assert.equal(pilot.nextQuestion(receiving, 'Hay 100 válvulas utilizables. Bodega recuenta, finanzas detiene el pago y obra dispone la recogida. Dejo un acta con el responsable del cierre.'), receiving.followUp);
+});
+
 test('review statistics count explicit zero and distinguish pending, missing evidence and invalid input', () => {
   const reviews = {
     retraso: {

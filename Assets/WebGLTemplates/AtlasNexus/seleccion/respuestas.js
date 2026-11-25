@@ -184,14 +184,20 @@
       (comparison.test(text) || (/\b(antes|base|inicio)\b/u.test(text) && /\b(despues|actual|cierre|final)\b/u.test(text)));
   }
 
-  function assess(profile, answers) {
-    const role = scenarios[profile?.id] || generic;
+  function assess(profile, answers, prompt = '') {
+    const scenario = scenarios[profile?.id] || generic;
+    const promptTerms = [...usefulWords(normalize(prompt))].filter(word => word.length >= 5);
+    const isRelevant = text => {
+      if (scenario.topic.test(text)) return true;
+      const words = usefulWords(text);
+      return promptTerms.filter(word => words.has(word)).length >= 2;
+    };
     const parts = clauses(answers);
-    const relevant = parts.some(part => role.topic.test(part.text));
+    const relevant = parts.some(part => isRelevant(part.text));
     const checks = {
-      context: text => role.topic.test(text) && (contextCue.test(text) || priorityCue.test(text)),
+      context: text => isRelevant(text) && (contextCue.test(text) || priorityCue.test(text)),
       action: text => affirmative(actionCue, text, true),
-      result: text => hasWorkOutcome(text, role),
+      result: text => hasWorkOutcome(text, scenario),
       verification: hasVerification,
     };
     const criteria = dimensions.map(dimension => {
@@ -201,12 +207,17 @@
     return {points: criteria.filter(item => item.met).length, max: OPEN_MAX, criteria, complete: criteria.every(item => item.met)};
   }
 
-  function followUp(profile, answers, previous = []) {
+  function followUp(profile, answers, previous = [], {prompt = '', hypothetical = false} = {}) {
     if (!Array.isArray(previous) || previous.length >= MAX_FOLLOW_UPS) return null;
-    const role = scenarios[profile?.id] || generic;
-    const missing = assess(profile, answers).criteria.filter(item => !item.met);
+    const role = hypothetical ? {
+      context: '¿Qué condición del caso influiría más en tu decisión?',
+      action: '¿Qué harías primero en esa situación y por qué?',
+      result: '¿Qué resultado concreto buscarías con esa decisión?',
+      verification: '¿Qué dato o registro usarías para comprobar el resultado?',
+    } : scenarios[profile?.id] || generic;
+    const missing = assess(profile, answers, prompt).criteria.filter(item => !item.met);
     if (missing.length === OPEN_MAX && !previous.includes('detail') && clauses(answers).length === 0) {
-      return {id: 'detail', text: 'Pensemos en un ejemplo concreto. ' + role.context};
+      return {id: 'detail', text: hypothetical ? role.context : 'Pensemos en un ejemplo concreto. ' + role.context};
     }
     const next = ['action', 'context', 'result', 'verification'].find(id => !previous.includes(id) && missing.some(item => item.id === id));
     return next ? {id: next, text: role[next]} : null;
@@ -232,7 +243,7 @@
 
   function combine(closed, summary) {
     if (!isSummary(summary)) return {...closed, open: null};
-    const openPoints = dimensions.reduce((points, {id}) => points + Number(summary.criteria[id]), 0);
+    const openPoints = summaryPoints(summary);
     const points = closed.points + openPoints;
     const max = closed.max + OPEN_MAX;
     return {...closed, points, max, percent: Math.round(100 * points / max), open: {
@@ -240,7 +251,11 @@
     }};
   }
 
+  function summaryPoints(summary) {
+    return dimensions.reduce((points, {id}) => points + Number(summary.criteria[id]), 0);
+  }
+
   root.AtlasOpenResponse = Object.freeze({
-    VERSION, OPEN_MAX, MAX_FOLLOW_UPS, assess, followUp, summarize, isSummary, override, combine,
+    VERSION, OPEN_MAX, MAX_FOLLOW_UPS, assess, followUp, summarize, isSummary, override, combine, summaryPoints,
   });
 })(globalThis);

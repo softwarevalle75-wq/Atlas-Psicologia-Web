@@ -2,6 +2,7 @@
   'use strict';
 
   const MAX_POINTS = 2;
+  const CONVERSATION_VERSION = 1;
   const groups = ['hard', 'soft'];
   const normalized = text => String(text ?? '').normalize('NFD').replace(/\p{M}/gu, '')
     .toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -49,6 +50,36 @@
     return {groups: totals, items, points, max, completed, percent: Math.round(100 * points / max)};
   }
 
+  function conversationQuestions(profile) {
+    return [...profile.questions, {
+      id: 'experience',
+      group: 'open',
+      skill: 'Experiencia aplicada',
+      prompt: profile.open.prompt,
+    }];
+  }
+
+  function scoreConversation(profile, conversation) {
+    if (conversation?.version !== CONVERSATION_VERSION) return null;
+    const {isSummary, summaryPoints, OPEN_MAX} = root.AtlasOpenResponse;
+    const questions = conversationQuestions(profile);
+    if (!Number.isInteger(conversation.answered) || conversation.answered < 0 || conversation.answered > questions.length) return null;
+    if (!questions.every(question => isSummary(conversation.evidence?.[question.id]))) return null;
+
+    const totals = Object.fromEntries([...groups, 'open'].map(group => [group, {points: 0, max: 0}]));
+    for (const question of questions) {
+      const total = totals[question.group];
+      total.points += summaryPoints(conversation.evidence[question.id]);
+      total.max += OPEN_MAX;
+    }
+    for (const total of Object.values(totals)) {
+      total.percent = Math.round(100 * total.points / total.max);
+    }
+    const points = Object.values(totals).reduce((total, group) => total + group.points, 0);
+    const max = questions.length * OPEN_MAX;
+    return {groups: totals, points, max, completed: conversation.answered === questions.length, percent: Math.round(100 * points / max), open: totals.open};
+  }
+
   function rank(profile, entries, evaluateEntry = entry => score(profile, entry.answers || {})) {
     const rows = entries.filter(entry => entry.role === profile.id)
       .map(entry => ({entry, score: evaluateEntry(entry)}))
@@ -81,5 +112,7 @@
     });
   }
 
-  root.AtlasHiringEvaluation = Object.freeze({reviewResume, score, rank, examples});
+  root.AtlasHiringEvaluation = Object.freeze({
+    CONVERSATION_VERSION, reviewResume, score, conversationQuestions, scoreConversation, rank, examples,
+  });
 })(globalThis);

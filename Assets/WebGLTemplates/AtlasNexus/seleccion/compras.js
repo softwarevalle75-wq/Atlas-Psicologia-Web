@@ -101,6 +101,36 @@
     },
   ];
 
+  const quantity = /\b\d+\s*(?:kits?|unidades?|paneles?|valvulas?)\b/u;
+  const money = /\$\s*\d|\b\d[\d.,]*\s*(?:cop|pesos|mil|millones?)\b|\bmil\s+pesos\b/u;
+  const timing = /\b(?:lunes|martes|miercoles|jueves|viernes|plazo|antes de|\d{1,2}\s*horas?)\b/u;
+  const confirmation = /\b(?:confirm\w*|acord\w*|comprom\w*|verific\w*)\b/u;
+  const certificate = /\b(?:certific\w*|conformidad|ficha tecnica)\b/u;
+  const records = /\b(?:acta|remision|registr\w*|lote|concili\w*|orden de compra)\b/u;
+  const probes = {
+    retraso: [
+      [[quantity], 'Para saber si el turno puede arrancar, ¿qué cantidad pedirías a cada proveedor y cuándo tendría que llegar?'],
+      [[money], '¿Cuánto costaría tu plan y cómo lo compararías con la otra alternativa viable?'],
+      [[confirmation, timing], '¿Qué confirmación pedirías antes de decirle a obra que puede mantener el turno y a qué hora activarías el respaldo?'],
+    ],
+    ofertas: [
+      [[money], '¿Cuál es el costo total puesto en obra de la oferta que recomiendas y cómo se compara con las demás?'],
+      [[timing], '¿Qué fecha y cantidad tendrías que confirmar con el proveedor para cubrir el inicio de obra?'],
+      [[certificate, confirmation], '¿Cómo comprobarías que el certificado corresponde al lote ofertado antes de autorizar la adjudicación?'],
+    ],
+    recepcion: [
+      [[quantity], '¿Cuántas válvulas se pueden entregar en condición conforme y qué harías con las faltantes o dañadas?'],
+      [[/\bbodega\b/u, /\b(?:factura|finanzas|pago)\b/u, /\bobra\b/u], '¿Qué comunicarías a bodega, a finanzas y a obra ahora mismo y en qué orden?'],
+      [[records, /\b(?:responsable|seguimiento|cierre|pendient\w*|encarg\w*)\b/u], '¿Qué registrarías para que el siguiente turno sepa qué quedó pendiente y quién debe resolverlo?'],
+    ],
+  };
+
+  function nextQuestion(item, answer) {
+    const text = answer.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    const missing = probes[item.id].find(([markers]) => !markers.every(marker => marker.test(text)));
+    return missing ? missing[1] : item.followUp;
+  }
+
   function summarize(reviews = {}) {
     return competencies.map(({id, label}) => {
       let points = 0;
@@ -120,5 +150,5 @@
     });
   }
 
-  root.AtlasComprasPilot = Object.freeze({version: 1, profileId: 'procurement', competencies, cases, summarize});
+  root.AtlasComprasPilot = Object.freeze({version: 1, profileId: 'procurement', competencies, cases, nextQuestion, summarize});
 })(globalThis);

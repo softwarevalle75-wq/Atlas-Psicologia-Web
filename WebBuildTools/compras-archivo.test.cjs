@@ -15,6 +15,16 @@ test('transfers only interview answers, never reviewer scores or private annotat
   assert.equal(file.reviews, undefined);
   assert.deepEqual(unpack({...file, reviews: record.reviews}), {...record, reviews: {}});
 });
+test('new exports round-trip the exact adaptive question and old interviews still load', () => {
+  const followUpPrompt = '¿Cuánto costaría tu plan y cómo lo compararías con la otra alternativa viable?';
+  const newer = {...record, answers:{...record.answers, retraso:{...record.answers.retraso, followUpPrompt}}};
+  assert.equal(unpack(pack(newer)).answers.retraso.followUpPrompt, followUpPrompt);
+  assert.equal(unpack(pack(record)).answers.retraso.followUpPrompt, undefined);
+  for (const malformed of ['', 12, 'x'.repeat(301), 'pregunta\u0000']) {
+    const file = pack(newer);
+    assert.throws(() => unpack({...file, answers:{...file.answers, retraso:{...file.answers.retraso, followUpPrompt:malformed}}}));
+  }
+});
 test('rejects incompatible, damaged and overlong submissions without rating unanswered cases', () => {
   const file = pack(record);
   for (const changes of [{role:'finance'}, {version:2}, {id:'wrong'}, {created:''}, {alias:' '}, {answers:{}},

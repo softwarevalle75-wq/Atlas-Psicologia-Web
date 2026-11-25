@@ -5,6 +5,10 @@
   const prefix = 'atlas.innovarq.compras.v1:';
   const answerLimit = 2400;
 
+  function askedFollowUp(item, answer) {
+    return answer?.main ? (answer.followUpPrompt || item.followUp) : '';
+  }
+
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text != null) node.textContent = text;
@@ -149,7 +153,7 @@
         notice('');
         showCase();
       }, 'primary', 'pilot-start');
-      flow.replaceChildren(el('h2', 'Piloto de Compras y Logística'), el('p', 'Resuelve tres situaciones de obra. Cada caso incluye una pregunta y una oportunidad para ampliar tu respuesta.', 'lede'),
+      flow.replaceChildren(el('h2', 'Entrevista de Compras y Logística'), el('p', 'Conversarás sobre tres situaciones de obra. Responde con tus propias palabras y el entrevistador profundizará en algún punto de tu respuesta.', 'lede'),
         field('Alias de la entrevista', alias, 'pilot-alias'),
         el('p', 'Usa un código sin nombres ni datos de contacto. Las respuestas guardadas quedan disponibles para quien use este perfil del navegador. Sin guardar, duran hasta que cierres o recargues la pestaña.', 'hint'),
         consentLabel, group('actions', begin, button('Volver a los cargos', () => {step = ''; onExit();}, 'text')));
@@ -179,7 +183,7 @@
     function showCase() {
       step = 'case';
       const item = rules.cases[caseIndex];
-      const question = probing ? item.followUp : item.prompt;
+      const question = probing ? draft.answers[item.id].followUpPrompt : item.prompt;
       const spoken = probing ? question : item.brief + ' ' + question;
       const answer = el('textarea');
       answer.rows = 5;
@@ -187,10 +191,10 @@
       const hear = button('Escuchar pregunta', () => voice.speak(spoken), 'text', 'pilot-hear');
       const record = button('Responder por voz', () => listening ? voice.stop() : voice.listen(), 'secondary', 'pilot-record');
       record.disabled = !voice.canListen;
-      const next = button(probing ? (caseIndex === rules.cases.length - 1 ? 'Terminar entrevista' : 'Siguiente caso') : 'Continuar', () => advance(false), 'primary', 'pilot-next');
+      const next = button(probing ? (caseIndex === rules.cases.length - 1 ? 'Terminar entrevista' : 'Siguiente caso') : 'Enviar respuesta', () => advance(false), 'primary', 'pilot-next');
       const controls = group('actions', next);
       if (!probing) controls.append(button('Dejar sin respuesta', () => {
-        if (answer.value.trim()) { notice('Pulsa Continuar para conservar lo que escribiste.'); return; }
+        if (answer.value.trim()) { notice('Pulsa Enviar respuesta para conservar lo que escribiste.'); return; }
         advance(true);
       }, 'text', 'pilot-skip'));
 
@@ -198,10 +202,10 @@
         el('h2', item.title), el('p', item.brief, 'pilot-brief'));
       if (probing) {
         const previous = el('details');
-        previous.append(el('summary', 'Tu primera respuesta'), el('blockquote', draft.answers[item.id].main));
+        previous.append(el('summary', 'Turnos anteriores'), el('p', item.prompt), el('blockquote', draft.answers[item.id].main));
         flow.append(previous);
       }
-      flow.append(el('h3', question), group('actions', hear, record),
+      flow.append(el('p', 'Entrevistador', 'hint'), el('h3', question), group('actions', hear, record),
         el('p', voice.canListen ? 'Puedes escribir o dictar y corregir la transcripción. El servicio de voz del navegador puede procesar el audio en línea.' : 'El dictado no está disponible en este navegador. Escribe tu respuesta.', 'hint'),
         field(probing ? 'Ampliación (opcional)' : 'Tu decisión y sus motivos', answer, 'pilot-answer'), controls);
       setListening(listening);
@@ -221,6 +225,7 @@
         if (!probing) draft.answers[item.id] = {main:value, followUp:''};
         else draft.answers[item.id].followUp = value;
         if (!probing && !skip) {
+          draft.answers[item.id].followUpPrompt = rules.nextQuestion(item, value);
           probing = true;
           animate('thinking');
           showCase();
@@ -263,12 +268,13 @@
 
     function responseTable(entries, container) {
       const item = rules.cases.find(candidate => candidate.id === selectedCase);
-      const {wrap, body} = table('pilot-answers-table', 'Respuestas al mismo caso', ['Alias', 'Decisión y motivos', 'Ampliación']);
+      const {wrap, body} = table('pilot-answers-table', 'Respuestas al mismo caso', ['Alias', 'Decisión y motivos', 'Repregunta', 'Ampliación']);
       for (const entry of entries) {
         const answer = entry.answers[item.id];
-        body.insertRow().append(el('th', entry.alias), el('td', answer?.main || 'Sin respuesta'), el('td', answer?.followUp || 'Sin ampliación'));
+        body.insertRow().append(el('th', entry.alias), el('td', answer?.main || 'Sin respuesta'),
+          el('td', askedFollowUp(item, answer) || 'Sin repregunta'), el('td', answer?.followUp || 'Sin ampliación'));
       }
-      container.replaceChildren(el('p', item.prompt, 'hint'), el('p', 'Repregunta · ' + item.followUp, 'hint'), wrap);
+      container.replaceChildren(el('p', item.prompt, 'hint'), wrap);
     }
 
     function fillRow(row, entry) {
@@ -331,7 +337,7 @@
         container.dataset.pilotCaseReview = item.id;
         const answer = entry.answers[item.id] || {};
         container.append(el('h3', item.title), el('p', item.prompt, 'hint'), el('blockquote', answer.main || 'Sin respuesta'),
-          el('p', item.followUp, 'hint'), el('blockquote', answer.followUp || 'Sin ampliación'));
+          el('p', askedFollowUp(item, answer) || 'Sin repregunta', 'hint'), el('blockquote', answer.followUp || 'Sin ampliación'));
         const form = el('form', null, 'flow');
         for (const criterion of item.criteria) {
           const name = rules.competencies.find(skill => skill.id === criterion.competencyId).label;
