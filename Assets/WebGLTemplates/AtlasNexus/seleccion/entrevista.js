@@ -7,6 +7,10 @@
   const api = (root.ATLAS_CONFIG?.apiBaseUrl || 'https://api.oscar-vr.iudcdesarrollo.tech/api/v1/atlas').replace(/\/$/, '');
   const byId = id => document.getElementById(id);
   const label = (tag, text, style) => Object.assign(document.createElement(tag), {textContent: text, className: style || ''});
+  function timecode(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    return Math.floor(seconds / 60).toString().padStart(2,'0') + ':' + (seconds % 60).toString().padStart(2,'0');
+  }
   const criterionLabels = Object.fromEntries([
     ['context','Situación y restricciones'], ['action','Decisión y acción'],
     ['result','Resultado esperado'], ['verification','Evidencia y verificación'],
@@ -127,7 +131,7 @@
 
     async function listen() {
       const session = current;
-      if (!session || session.finishing) return;
+      if (!session || session.finishing || session.paused) return;
       setPhase('listening','Activando el micrófono…');
       subtitle.textContent = '';
       try {
@@ -144,6 +148,7 @@
     }
 
     async function speak(session, text) {
+      if (session.paused) return;
       mic.stop();
       setPhase('speaking','El entrevistador está preparando la voz…');
       // A question may be replayed during an earlier playback. Only the newest playback opens the microphone.
@@ -193,8 +198,7 @@
       byId('voice-interview-engine').textContent = '';
       byId('voice-interview-time').textContent = '00:00';
       meter = setInterval(() => {
-        const seconds = Math.floor((Date.now()-session.started)/1000);
-        byId('voice-interview-time').textContent = Math.floor(seconds/60).toString().padStart(2,'0') + ':' + (seconds%60).toString().padStart(2,'0');
+        byId('voice-interview-time').textContent = timecode(Date.now()-session.started);
       },1000);
       setPhase('ready','Preparando la entrevista…');
       try { void voice.unlock(); } catch {}
@@ -278,6 +282,7 @@
       voice.cancel();
       mic.cancel();
       clearInterval(meter);
+      session.elapsed = Date.now() - session.started;
       saveCase(session);
       setPhase('thinking','Preparando el informe por competencias…');
       const evaluation = session.all.length ? await remote(session,'evaluate',session.profile.id,transcripts(session.all,session.purchasing)) : null;
@@ -302,7 +307,7 @@
       byId('voice-report-ring').style.setProperty('--score', (score ?? 0) + '%');
       const responses = session.records.length;
       byId('voice-report-coverage').textContent = responses + ' de ' + session.items.length + ' situaciones respondidas · ' +
-        rated.length + ' de ' + rows.length + ' criterios con evidencia';
+        rated.length + ' de ' + rows.length + ' criterios con evidencia · ' + timecode(session.elapsed);
       const cards = byId('voice-report-criteria');
       cards.replaceChildren(...rows.map(row=>{
         const card = label('article','','voice-criterion');
@@ -324,7 +329,8 @@
         article.append(label('h3',turn.question), label('p',turn.answer));
         return article;
       }));
-      byId('voice-report-heading').focus();
+      byId('voice-report-heading').focus({preventScroll:true});
+      report.scrollIntoView?.({block:'start'});
     }
 
     function close() {
@@ -350,6 +356,7 @@
     });
     byId('voice-interview-repeat').addEventListener('click', () => {
       if (!current || !current.spoken) return;
+      current.paused = false;
       phase = 'speaking';
       mic.cancel();
       current.prepared = false;
@@ -368,13 +375,16 @@
     root.addEventListener('pagehide',close);
     document.addEventListener('visibilitychange', () => {
       if (!current || document.visibilityState !== 'hidden' || current.finishing) return;
+      current.paused = true;
       ++current.playback;
       phase = 'ready';
       mic.cancel();
       current.prepared = false;
       voice.cancel();
       showRetry('La entrevista se pausó. Puedes retomar la pregunta.', 'Retomar entrevista', () => {
-        if (current?.spoken) void speak(current,current.spoken);
+        if (!current?.spoken) return;
+        current.paused = false;
+        void speak(current,current.spoken);
       });
     });
 
