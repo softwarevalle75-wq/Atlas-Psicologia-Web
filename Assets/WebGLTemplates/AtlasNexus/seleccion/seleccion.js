@@ -8,75 +8,32 @@
   const storageKey = 'atlas.innovarq.practice.v1';
   const groupNames = {hard: 'Habilidades técnicas', soft: 'Habilidades interpersonales', open: 'Experiencia aplicada'};
   const profileFor = select => profiles.find(profile => profile.id === byId(select).value) || profiles[0];
-  let interview;
   let demoVisible = false;
   let view = 'interview';
   let attempts = readAttempts();
   const office = document.querySelector('.office');
   const officeMode = byId('office-mode');
-  let speaking = false;
-  let listening = false;
-  let gesture = '';
-  let gestureTimer = 0;
   let scene;
   if (window.AtlasHiringScene) {
     scene = window.AtlasHiringScene.mount(byId('office-3d'), status => {
       officeMode.textContent = office.dataset.scene === 'fallback' ? status : '';
     });
   }
-  const voice = window.AtlasHiringVoice.create({
-    onTranscript: receiveTranscript,
-    onStatus: message => notice(message),
-    onSpeaking: active => {speaking = active;updateActivity();},
-    onListening: active => {listening = active;updateActivity();},
-  });
   const pilotRole = window.AtlasComprasPilot.profileId;
   const pilot = window.AtlasComprasUI.mount({
-    flow: byId('compras-flow'), comparison: byId('compras-comparison'), voice, notice, animate: animateFeedback,
-    onExit: closePilot,
+    comparison: byId('compras-comparison'), notice,
     onExport: entry => window.AtlasComprasArchivo.download(entry),
-    onCompare: () => {
-      closePilot();
-      byId('compare-cargo').value = pilotRole;
-      switchView('compare');
-    },
   });
   window.AtlasComprasArchivo.bindImport(byId('pilot-import'), byId('pilot-import-status'), pilot);
+  const interview = window.AtlasVoiceInterview.create({scene, save: saveRecording});
 
-  function closePilot() {
-    voice.cancel();
-    byId('compras-flow').hidden = true;
-    byId('setup').hidden = false;
-    document.body.classList.remove('interview-active');
-    byId('begin-compras').focus();
-  }
-
-  function updateActivity() {
-    const mode = listening ? 'listening' : speaking ? 'talking' : gesture || 'idle';
-    office.dataset.activity = mode;
-    officeMode.textContent = listening ? 'Escuchando' : speaking ? 'Hablando' :
-      gesture === 'thinking' ? 'Revisando respuesta' : '';
-    scene?.setMode(mode);
-    byId('record-answer').textContent = listening ? 'Terminar dictado' : 'Responder por voz';
-    byId('record-answer').setAttribute('aria-pressed', String(listening));
-    byId('next').disabled = listening;
-    byId('hear').disabled = listening || !voice.canSpeak;
-    byId('skip-open').disabled = listening;
-    pilot.setListening(listening);
-  }
-
-  function animateFeedback(next) {
-    clearTimeout(gestureTimer);
-    gesture = next;
-    updateActivity();
-    if (next) gestureTimer = setTimeout(() => animateFeedback(''), 1100);
-  }
-
-  function receiveTranscript(raw) {
-    if (view === 'interview' && pilot.receiveTranscript(raw)) return;
-    if (!interview || interview.entry || view !== 'interview') return;
-    const field = byId('open-answer');
-    field.value = (field.value.trim() + ' ' + raw).trim().slice(0, field.maxLength);
+  function saveRecording(session) {
+    const download = byId('voice-report-export');
+    download.hidden = !session.purchasing;
+    if (!session.purchasing) return addAttempt(session.profile, session.records);
+    const entry = pilot.recordSession(session.records);
+    download.onclick = () => window.AtlasComprasArchivo.download(entry);
+    return entry;
   }
 
   function element(tag, text, className) {
@@ -110,7 +67,10 @@
     const saved = readAttempts();
     if (saved.length) attempts = saved;
     const max = attempts.reduce((number, item) => Math.max(number, Number(item.name.slice(10)) || 0), 0);
-    const evidence = Object.fromEntries(records.map(({question, assessment}) => [question.id, openRubric.summarize(assessment)]));
+    const assessed = new Map(records.map(({question, assessment}) => [question.id, assessment]));
+    const empty = openRubric.summarize(openRubric.assess(profile, []));
+    const evidence = Object.fromEntries(evaluate.conversationQuestions(profile).map(question => [question.id,
+      assessed.has(question.id) ? openRubric.summarize(assessed.get(question.id)) : empty]));
     const entry = {
       name: 'Candidato ' + String(max + 1).padStart(2, '0'),
       role: profile.id,
@@ -130,11 +90,10 @@
   }
 
   function switchView(next) {
-    voice.cancel();
-    animateFeedback('');
+    interview.close();
+    byId('setup').hidden = false;
     view = next;
     if (next !== 'compare') document.body.classList.remove('pilot-report');
-    document.body.classList.toggle('interview-active', next === 'interview' && (pilot.active || (!!interview && !interview.entry)));
     scene?.setVisible(next === 'interview');
     for (const button of document.querySelectorAll('[data-view]')) {
       const active = button.dataset.view === next;
@@ -165,139 +124,12 @@
   }
 
   function startInterview() {
-    const profile = profileFor('cargo');
-    if (profile.id === pilotRole) return;
-    interview = {profile, questions: evaluate.conversationQuestions(profile), next: 0, records: [], turns: [], followUps: [], entry: null};
     byId('setup').hidden = true;
-    byId('results').hidden = true;
-    byId('interview-flow').hidden = false;
-    document.body.classList.add('interview-active');
-    byId('open-answer').value = '';
-    renderQuestion();
-  }
-
-  function current() {
-    return interview.questions[interview.next];
-  }
-
-  function renderQuestion() {
-    const {questions, next, followUps} = interview;
-    const question = current();
-    const follow = followUps.at(-1);
-    const title = byId('question-title');
-    const progress = 'Pregunta ' + (next + 1) + ' de ' + questions.length;
-    byId('question-step').textContent = follow ? progress + ' · Repregunta ' + followUps.length : progress;
-    byId('question-skill').textContent = question.group === 'open' ? question.skill :
-      groupNames[question.group] + ' · ' + question.skill;
-    title.textContent = follow?.text || question.prompt;
-    byId('voice-hint').textContent = voice.canListen ?
-      'Habla o escribe con tus propias palabras. Si dictas, puedes corregir la transcripción antes de enviarla.' :
-      'El dictado no está disponible en este navegador. Escribe tu respuesta.';
-    notice('');
-    title.focus();
-    readQuestion();
-  }
-
-  function readQuestion() {
-    if (!voice.canSpeak || view !== 'interview' || !interview || interview.entry) return;
-    voice.speak(byId('question-title').textContent);
-  }
-
-  function finishInterview() {
-    if (interview.entry) return;
-    voice.cancel();
-    interview.entry = addAttempt(interview.profile, interview.records);
-    animateFeedback('acknowledge');
-    renderResults();
-  }
-
-  function advance(skip = false) {
-    if (!interview || interview.entry || listening) return;
-    const field = byId('open-answer');
-    const text = field.value.trim();
-    if (!skip && !text) {
-      notice('Escribe o dicta tu respuesta para continuar.');
-      field.focus();
-      return;
-    }
-    field.value = '';
-    if (!skip) interview.turns.push({prompt: byId('question-title').textContent, text});
-    const question = current();
-    const answers = interview.turns.map(turn => turn.text);
-    const hypothetical = question.group !== 'open';
-    const limit = hypothetical ? 1 : openRubric.MAX_FOLLOW_UPS;
-    const follow = !skip && interview.followUps.length < limit ?
-      openRubric.followUp(interview.profile, answers, interview.followUps.map(item => item.id), {prompt: question.prompt, hypothetical}) : null;
-    if (follow) {
-      interview.followUps.push(follow);
-      animateFeedback('thinking');
-      renderQuestion();
-      return;
-    }
-    const assessment = openRubric.assess(interview.profile, answers, question.prompt);
-    interview.records.push({question, turns: interview.turns, assessment});
-    interview.turns = [];
-    interview.followUps = [];
-    interview.next++;
-    if (current()) renderQuestion();
-    else finishInterview();
-  }
-
-  function scorecard(label, result) {
-    const card = element('div', null, 'scorecard');
-    card.append(element('p', label), element('strong', result.percent + '%'),
-      element('span', result.points + ' de ' + result.max + ' puntos'));
-    const meter = element('progress');
-    meter.max = 100;
-    meter.value = result.percent;
-    meter.setAttribute('aria-label', label);
-    card.append(meter);
-    return card;
-  }
-
-  function writeReview(summary) {
-    const review = byId('answer-review');
-    review.replaceChildren(element('h3', 'Retroalimentación'));
-    review.append(element('p', 'Revisa las respuestas y sus evidencias antes de interpretar el puntaje.', 'hint'));
-    if (!summary.completed) {
-      review.append(element('p', 'Responde todas las preguntas principales para incluir esta entrevista en la comparación.', 'hint'));
-    }
-    for (const {question, turns, assessment} of interview.records) {
-      const item = element('article', null, 'review-item');
-      item.append(element('h4', question.skill + ' · ' + assessment.points + '/' + assessment.max));
-      for (const turn of turns) {
-        item.append(element('p', turn.prompt, 'hint'), element('blockquote', turn.text));
-      }
-      if (!turns.length) {
-        item.append(element('p', question.prompt), element('p', 'Pregunta omitida.', 'hint'));
-      } else {
-        const list = element('ul', null, 'evidence-list');
-        for (const criterion of assessment.criteria) {
-          const row = element('li');
-          row.append(element('strong', criterion.label), element('span', criterion.evidence || 'Por confirmar en la revisión.'));
-          list.append(row);
-        }
-        item.append(list);
-      }
-      review.append(item);
-    }
-  }
-
-  function renderResults() {
-    const summary = evaluate.scoreConversation(interview.profile, interview.entry.conversation);
-    byId('interview-flow').hidden = true;
-    document.body.classList.remove('interview-active');
-    byId('results').hidden = false;
-    byId('scorecards').replaceChildren(
-      scorecard('Evidencia detectada', summary),
-      scorecard(groupNames.hard, summary.groups.hard),
-      scorecard(groupNames.soft, summary.groups.soft),
-      scorecard(groupNames.open, summary.open)
-    );
-    byId('compare-cargo').value = interview.profile.id;
-    writeReview(summary);
-    byId('open-answer').value = '';
-    byId('results').querySelector('h2').focus();
+    byId('voice-report-export').hidden = true;
+    byId('voice-report-export').onclick = null;
+    const profile = profileFor('cargo');
+    byId('compare-cargo').value = profile.id;
+    void interview.start(profile);
   }
 
   function reviewResume() {
@@ -430,33 +262,12 @@
     byId('resume-output').replaceChildren();
   });
   byId('begin').addEventListener('click', startInterview);
-  byId('begin-compras').addEventListener('click', () => {
-    if (profileFor('cargo').id !== pilotRole) return;
-    byId('setup').hidden = true;
-    byId('compras-flow').hidden = false;
-    document.body.classList.add('interview-active');
-    notice('');
-    pilot.start();
-  });
-  byId('next').addEventListener('click', () => advance());
+  byId('begin-compras').addEventListener('click', startInterview);
   byId('compare-now').addEventListener('click', () => switchView('compare'));
   byId('repeat').addEventListener('click', () => {
-    byId('cargo').value = interview.profile.id;
-    byId('results').hidden = true;
-    byId('setup').hidden = false;
-    interview = null;
-    notice('');
-    showProfile();
-    byId('begin').focus();
+    switchView('interview');
+    byId(profileFor('cargo').id === pilotRole ? 'begin-compras' : 'begin').focus();
   });
-  byId('hear').disabled = !voice.canSpeak;
-  byId('hear').addEventListener('click', readQuestion);
-  byId('record-answer').disabled = !voice.canListen;
-  byId('record-answer').addEventListener('click', () => {
-    if (listening) voice.stop();
-    else if (interview && !interview.entry && view === 'interview') voice.listen();
-  });
-  byId('skip-open').addEventListener('click', () => advance(true));
 
   byId('resume-cargo').addEventListener('change', () => {
     byId('resume-output').replaceChildren();
@@ -471,7 +282,6 @@
     byId('sample-data').textContent = demoVisible ? 'Ocultar resultados de ejemplo' : 'Cargar resultados de ejemplo';
     renderComparison();
   });
-  window.addEventListener('pagehide', () => voice.cancel());
 
   if (new URLSearchParams(window.location.search).get('piloto') === 'compras') {
     for (const id of ['cargo', 'compare-cargo', 'resume-cargo']) byId(id).value = pilotRole;

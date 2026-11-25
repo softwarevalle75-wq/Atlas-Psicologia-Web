@@ -3,7 +3,6 @@
 
   const rules = root.AtlasComprasPilot;
   const prefix = 'atlas.innovarq.compras.v1:';
-  const answerLimit = 2400;
 
   function askedFollowUp(item, answer) {
     return answer?.main ? (answer.followUpPrompt || item.followUp) : '';
@@ -60,18 +59,12 @@
     return {wrap, body: grid.createTBody()};
   }
 
-  function mount({flow, comparison, voice, notice, animate, onExit, onCompare, onExport, onRecordsChanged}) {
+  function mount({comparison, notice, onExport, onRecordsChanged}) {
     // Session-only entries also preserve a completed interview if browser storage is unavailable.
     const memory = new Map();
     const transient = new Set();
-    let step = '';
-    let draft = null;
-    let caseIndex = 0;
-    let probing = false;
-    let listening = false;
     let selectedReview = '';
     let selectedCase = rules.cases[0].id;
-    let wantStorage = false;
     let storageFailed = false;
 
     function getEntries() {
@@ -119,151 +112,21 @@
       return true;
     }
 
-    function start() {
-      voice.cancel();
-      draft = null;
-      step = 'setup';
-      caseIndex = 0;
-      probing = false;
-      const alias = el('input');
-      alias.type = 'text';
-      alias.required = true;
-      alias.maxLength = 40;
-      alias.autocomplete = 'off';
-      alias.spellcheck = false;
+    function recordSession(records) {
       const list = getEntries();
       let number = list.length + 1;
-      do {
-        alias.value = 'Compras ' + String(number++).padStart(2, '0');
-      } while (aliasTaken(alias.value, list));
-      const consent = el('input');
-      consent.type = 'checkbox';
-      consent.id = 'pilot-save-local';
-      const consentLabel = el('label', null, 'pilot-consent');
-      consentLabel.append(consent, document.createTextNode(' Guardar mis respuestas y su evaluación en este navegador para compararlas después.'));
-      const begin = button('Comenzar los tres casos', () => {
-        const name = alias.value.trim();
-        if (!name || aliasTaken(name, getEntries())) {
-          notice(name ? 'Ese alias ya existe. Usa otro para distinguir las entrevistas.' : 'Escribe un alias para esta entrevista.');
-          alias.focus();
-          return;
-        }
-        draft = {version:rules.version, id:crypto.randomUUID(), alias:name, created:new Date().toISOString(), answers:{}, reviews:{}};
-        wantStorage = consent.checked;
-        notice('');
-        showCase();
-      }, 'primary', 'pilot-start');
-      flow.replaceChildren(el('h2', 'Entrevista de Compras y Logística'), el('p', 'Conversarás sobre tres situaciones de obra. Responde con tus propias palabras y el entrevistador profundizará en algún punto de tu respuesta.', 'lede'),
-        field('Alias de la entrevista', alias, 'pilot-alias'),
-        el('p', 'Usa un código sin nombres ni datos de contacto. Las respuestas guardadas quedan disponibles para quien use este perfil del navegador. Sin guardar, duran hasta que cierres o recargues la pestaña.', 'hint'),
-        consentLabel, group('actions', begin, button('Volver a los cargos', () => {step = ''; onExit();}, 'text')));
-      heading(flow);
-    }
-
-    function receiveTranscript(raw) {
-      if (step !== 'case') return false;
-      const field = flow.querySelector('#pilot-answer');
-      field.value = (field.value.trimEnd() + ' ' + raw).trimStart().slice(0, answerLimit);
-      return true;
-    }
-
-    function setListening(value) {
-      listening = value;
-      if (step !== 'case') return;
-      const record = flow.querySelector('#pilot-record');
-      if (!record) return;
-      record.textContent = value ? 'Terminar dictado' : 'Responder por voz';
-      record.setAttribute('aria-pressed', String(value));
-      flow.querySelector('#pilot-next').disabled = value;
-      flow.querySelector('#pilot-hear').disabled = value || !voice.canSpeak;
-      const skip = flow.querySelector('#pilot-skip');
-      if (skip) skip.disabled = value;
-    }
-
-    function showCase() {
-      step = 'case';
-      const item = rules.cases[caseIndex];
-      const question = probing ? draft.answers[item.id].followUpPrompt : item.prompt;
-      const spoken = probing ? question : item.brief + ' ' + question;
-      const answer = el('textarea');
-      answer.rows = 5;
-      answer.maxLength = answerLimit;
-      const hear = button('Escuchar pregunta', () => voice.speak(spoken), 'text', 'pilot-hear');
-      const record = button('Responder por voz', () => listening ? voice.stop() : voice.listen(), 'secondary', 'pilot-record');
-      record.disabled = !voice.canListen;
-      const next = button(probing ? (caseIndex === rules.cases.length - 1 ? 'Terminar entrevista' : 'Siguiente caso') : 'Enviar respuesta', () => advance(false), 'primary', 'pilot-next');
-      const controls = group('actions', next);
-      if (!probing) controls.append(button('Dejar sin respuesta', () => {
-        if (answer.value.trim()) { notice('Pulsa Enviar respuesta para conservar lo que escribiste.'); return; }
-        advance(true);
-      }, 'text', 'pilot-skip'));
-
-      flow.replaceChildren(el('p', 'Caso ' + (caseIndex + 1) + ' de ' + rules.cases.length + ' · ' + item.method, 'hint'),
-        el('h2', item.title), el('p', item.brief, 'pilot-brief'));
-      if (probing) {
-        const previous = el('details');
-        previous.append(el('summary', 'Turnos anteriores'), el('p', item.prompt), el('blockquote', draft.answers[item.id].main));
-        flow.append(previous);
-      }
-      flow.append(el('p', 'Entrevistador', 'hint'), el('h3', question), group('actions', hear, record),
-        el('p', voice.canListen ? 'Puedes escribir o dictar y corregir la transcripción. El servicio de voz del navegador puede procesar el audio en línea.' : 'El dictado no está disponible en este navegador. Escribe tu respuesta.', 'hint'),
-        field(probing ? 'Ampliación (opcional)' : 'Tu decisión y sus motivos', answer, 'pilot-answer'), controls);
-      setListening(listening);
-      heading(flow);
-      if (voice.canSpeak) voice.speak(spoken);
-
-      function advance(skip) {
-        if (listening) return;
-        const value = answer.value.trim();
-        if (!value && !skip && !probing) {
-          notice('Escribe o dicta tu respuesta, o elige dejar el caso sin respuesta.');
-          answer.focus();
-          return;
-        }
-        voice.cancel();
-        notice('');
-        if (!probing) draft.answers[item.id] = {main:value, followUp:''};
-        else draft.answers[item.id].followUp = value;
-        if (!probing && !skip) {
-          draft.answers[item.id].followUpPrompt = rules.nextQuestion(item, value);
-          probing = true;
-          animate('thinking');
-          showCase();
-        } else if (++caseIndex < rules.cases.length) {
-          probing = false;
-          showCase();
-        } else {
-          finish();
-        }
-      }
-    }
-
-    function finish() {
-      step = 'done';
-      const existing = getEntries();
-      const alias = draft.alias;
-      let suffix = 2;
-      while (aliasTaken(draft.alias, existing)) {
-        const tail = ' (' + suffix++ + ')';
-        draft.alias = alias.slice(0, 40 - tail.length) + tail;
-      }
-      if (!wantStorage) transient.add(draft.id);
-      save(draft);
-      animate('acknowledge');
-      const count = Object.values(draft.answers).filter(answer => answer.main).length;
-      const summary = draft.alias + ' · ' + count + ' de ' + rules.cases.length + ' casos con respuesta. El reclutador puede revisar la evidencia de cada competencia.';
-      const durability = !wantStorage ? 'Puedes volver a Comparar durante esta pestaña. Para llevar tus respuestas a otro equipo o conservarlas al cerrar, descarga esta entrevista.' :
-        storageFailed ? 'El navegador bloqueó el guardado. Puedes descargar las respuestas o compararlas mientras siga abierta esta pestaña.' : 'Guardada en este navegador. También puedes descargar las respuestas para compartirlas con el reclutador.';
-      const actions = group('actions', button('Ir a comparar entrevistas', () => {
-        selectedReview = draft.id;
-        step = '';
-        onCompare();
-      }, 'primary', 'pilot-to-compare'));
-      if (onExport) actions.append(button('Descargar esta entrevista', () => onExport(draft), 'secondary', 'pilot-export'));
-      actions.append(button('Nueva entrevista', start, 'secondary', 'pilot-new'),
-        button('Volver a los cargos', () => {step = ''; onExit();}, 'text'));
-      flow.replaceChildren(el('h2', 'Entrevista completada'), el('p', summary), el('p', durability, 'hint'), actions);
-      heading(flow);
+      let alias;
+      do { alias = 'Compras ' + String(number++).padStart(2,'0'); } while (aliasTaken(alias,list));
+      const answers = Object.fromEntries(records.map(record => [record.question.id, {
+        main: record.turns[0]?.text || '',
+        followUp: record.turns[1]?.text || '',
+        ...(record.turns[1] ? {followUpPrompt:record.turns[1].prompt} : {}),
+      }]));
+      const entry = {version:rules.version,id:crypto.randomUUID(),alias,created:new Date().toISOString(),answers,reviews:{}};
+      transient.add(entry.id);
+      save(entry);
+      selectedReview = entry.id;
+      return entry;
     }
 
     function responseTable(entries, container) {
@@ -424,8 +287,7 @@
       }, 'text'));
     }
 
-    return {start, receiveTranscript, setListening, renderComparison, getEntries, importEntry,
-      get storageFailed() {return storageFailed;}, get active() {return step === 'case';}};
+    return {recordSession, renderComparison, getEntries, importEntry};
   }
 
   root.AtlasComprasUI = Object.freeze({mount});

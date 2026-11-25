@@ -1,23 +1,10 @@
 (function (root) {
   'use strict';
 
-  const LANGUAGE = 'es-CO';
-  const MAX_LISTEN_MS = 110000;
-  const FINALIZE_MS = 8000;
   const REQUEST_MS = 35000;
   const AUDIO_HZ = 24000;
   const MAX_PCM_BYTES = 4000000;
   const DEFAULT_API = 'https://api.oscar-vr.iudcdesarrollo.tech/api/v1/atlas';
-  const MESSAGES = {
-    'no-speech': 'No detecté voz. Vuelve a intentarlo o responde por escrito.',
-    'audio-capture': 'El navegador no pudo usar el micrófono. Revisa el dispositivo de entrada o escribe tu respuesta.',
-    'not-allowed': 'El permiso del micrófono está bloqueado. Permítelo en el navegador o responde por escrito.',
-    'service-not-allowed': 'El navegador no habilitó el reconocimiento de voz. Puedes responder por escrito.',
-    'network': 'El reconocimiento de voz perdió la conexión. Puedes intentarlo de nuevo o responder por escrito.',
-    'language-not-supported': 'El reconocimiento en español no está disponible en este navegador. Puedes responder por escrito.',
-  };
-  const READY = 'Transcripción lista. Revísala antes de enviar la respuesta.';
-  const EMPTY = 'No se obtuvo una transcripción. Puedes intentarlo de nuevo o responder por escrito.';
   const SPEECH_ERROR = 'La voz de ElevenLabs no está disponible en este momento. Puedes leer la pregunta o tocar «Escuchar pregunta» para reintentar.';
   const ENABLE_AUDIO = 'Toca «Escuchar pregunta» para habilitar la reproducción en este navegador.';
 
@@ -37,140 +24,37 @@
     return clip;
   }
 
-  function create({onTranscript = () => {}, onStatus = () => {},
-    onSpeaking = () => {}, onListening = () => {}} = {}) {
-    const Recognition = root.SpeechRecognition || root.webkitSpeechRecognition;
+  function create({onStatus = () => {}, onSpeaking = () => {}, onSpeechLevel} = {}) {
     const AudioContext = root.AudioContext || root.webkitAudioContext;
-    const canListen = typeof Recognition === 'function' && root.isSecureContext !== false;
     const canSpeak = typeof AudioContext === 'function' && typeof root.fetch === 'function' &&
       typeof root.AbortController === 'function' && root.isSecureContext !== false;
     const apiBase = (root.ATLAS_CONFIG?.apiBaseUrl || DEFAULT_API).replace(/\/$/, '');
-    let microphone = null;
     let speech = null;
     let voicePass = null;
     let lastAudio = null;
     let context = null;
 
-    function finishMicrophone(turn, message, abort = false) {
-      if (microphone !== turn) return;
-      microphone = null;
-      root.clearTimeout(turn.timeout);
-      if (abort) {
-        try {
-          turn.recognition.abort();
-        } catch {
-          // A recognition service that has already ended cannot be aborted again.
-        }
-      }
-      onListening(false);
-      onStatus(message);
-    }
-
-    function stop() {
-      const turn = microphone;
-      if (!turn || turn.finishing) return;
-      turn.finishing = true;
-      root.clearTimeout(turn.timeout);
-      turn.timeout = root.setTimeout(() => finishMicrophone(turn, turn.hasText ? READY : EMPTY, true), FINALIZE_MS);
-      onStatus('Terminando la transcripción…');
-      try {
-        turn.recognition.stop();
-      } catch {
-        finishMicrophone(turn, turn.hasText ? READY : EMPTY, true);
-      }
-    }
-
-    function listen() {
-      if (!canListen) {
-        onStatus('El dictado por micrófono no está disponible en este navegador. Puedes responder por escrito.');
-        return false;
-      }
-      if (microphone) return false;
-      finishSpeech();
-
-      let recognition;
-      try {
-        recognition = new Recognition();
-      } catch {
-        onStatus(MESSAGES['service-not-allowed']);
-        return false;
-      }
-      recognition.lang = LANGUAGE;
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      const turn = {recognition, finalIndices: new Set(), hasText: false, finishing: false, timeout: 0};
-      microphone = turn;
-      recognition.onstart = () => {
-        if (microphone === turn && !turn.finishing) onStatus('Te escucho… pulsa Detener al terminar.');
-      };
-      recognition.onresult = event => {
-        if (microphone !== turn) return;
-        const final = [];
-        const interim = [];
-        for (let i = event.resultIndex || 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          const phrase = result?.[0]?.transcript?.trim();
-          if (!phrase) continue;
-          if (result.isFinal) {
-            if (turn.finalIndices.has(i)) continue;
-            turn.finalIndices.add(i);
-            final.push(phrase);
-          } else {
-            interim.push(phrase);
-          }
-        }
-        if (final.length) {
-          turn.hasText = true;
-          onTranscript(final.join(' '));
-        }
-        if (microphone !== turn) return;
-        if (!turn.finishing && interim.length) {
-          onStatus('Escuchando… «' + interim.join(' ').slice(0, 140) + '»');
-        } else if (!turn.finishing) {
-          onStatus('Transcripción en curso… pulsa Detener al terminar.');
-        }
-      };
-      recognition.onend = () => finishMicrophone(turn, turn.hasText ? READY : EMPTY);
-      recognition.onerror = event => {
-        const message = event.error === 'aborted' ? (turn.hasText ? READY : EMPTY) :
-          (event.error === 'no-speech' && turn.hasText ? READY : (MESSAGES[event.error] || EMPTY));
-        finishMicrophone(turn, message);
-      };
-      recognition.onnomatch = () => {
-        if (microphone === turn && !turn.hasText) onStatus('No entendí esa parte. Habla con claridad o escribe tu respuesta.');
-      };
-
-      onListening(true);
-      onStatus('Activando el micrófono…');
-      turn.timeout = root.setTimeout(stop, MAX_LISTEN_MS);
-      try {
-        recognition.start();
-      } catch (error) {
-        finishMicrophone(turn, error.name === 'NotAllowedError' ? MESSAGES['not-allowed'] : MESSAGES['service-not-allowed'], true);
-        return false;
-      }
-      return true;
-    }
-
-    function finishSpeech() {
+    function finishSpeech(result = 'cancelled') {
       const turn = speech;
       if (!turn) return;
       speech = null;
       root.clearTimeout(turn.timeout);
+      if (turn.levelTimer) root.clearInterval(turn.levelTimer);
       turn.controller.abort();
       if (turn.source) {
         turn.source.onended = null;
         try { turn.source.stop(); } catch {}
         turn.source.disconnect();
       }
+      turn.analyser?.disconnect();
       if (turn.playing) onSpeaking(false);
+      if (turn.levelTimer) onSpeechLevel?.(0);
+      for (const resolve of turn.waiters) resolve(result);
     }
 
     function failSpeech(turn, message) {
       if (speech !== turn) return;
-      finishSpeech();
+      finishSpeech('unavailable');
       onStatus(message);
     }
 
@@ -242,15 +126,28 @@
         const source = context.createBufferSource();
         turn.source = source;
         source.buffer = clip;
-        source.connect(context.destination);
+        if (onSpeechLevel && context.createAnalyser) {
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 128;
+          const data = new Float32Array(analyser.fftSize);
+          source.connect(analyser);
+          analyser.connect(context.destination);
+          turn.analyser = analyser;
+          turn.levelTimer = root.setInterval(() => {
+            analyser.getFloatTimeDomainData(data);
+            let squares = 0;
+            for (const value of data) squares += value * value;
+            onSpeechLevel(Math.min(1, Math.sqrt(squares / data.length) * 5));
+          }, 60);
+        } else source.connect(context.destination);
         source.onended = () => {
-          if (speech === turn) finishSpeech();
+          if (speech === turn) finishSpeech('finished');
         };
         source.start();
         turn.playing = true;
         root.clearTimeout(turn.timeout);
         turn.timeout = root.setTimeout(() => {
-          if (speech === turn) finishSpeech();
+          if (speech === turn) finishSpeech('unavailable');
         }, Math.ceil(clip.duration * 1000) + 3000);
         onSpeaking(true);
         onStatus('');
@@ -260,7 +157,13 @@
       }
     }
 
-    function speak(text) {
+    function unlock() {
+      if (!canSpeak) return Promise.resolve();
+      context ||= new AudioContext();
+      return context.state === 'running' ? Promise.resolve() : context.resume().catch(() => {});
+    }
+
+    function speak(text, complete) {
       const question = String(text || '').trim().replace(/\s+/g, ' ');
       if (!question || question.length > 1600) return false;
       if (!canSpeak) {
@@ -269,17 +172,19 @@
       }
       let resumed;
       try {
-        context ||= new AudioContext();
-        // Start resume inside the initiating tap, before waiting for ElevenLabs.
-        resumed = context.state === 'running' ? Promise.resolve() : context.resume().catch(() => {});
+        // Resume inside the initiating tap, before waiting for ElevenLabs.
+        resumed = unlock();
       } catch {
         onStatus(ENABLE_AUDIO);
         return false;
       }
-      if (speech?.text === question && !speech.playing) return true;
-      if (microphone) finishMicrophone(microphone, '', true);
+      if (speech?.text === question && !speech.playing) {
+        if (complete) speech.waiters.push(complete);
+        return true;
+      }
       finishSpeech();
-      const turn = {text: question, controller: new root.AbortController(), source: null, timeout: 0, playing: false};
+      const turn = {text: question, controller: new root.AbortController(), source: null, timeout: 0,
+        playing: false, waiters:complete ? [complete] : []};
       speech = turn;
       turn.timeout = root.setTimeout(() => failSpeech(turn, SPEECH_ERROR), REQUEST_MS);
       if (lastAudio?.text !== question) onStatus('Preparando la voz del entrevistador…');
@@ -287,8 +192,11 @@
       return true;
     }
 
+    function speakAndWait(text) {
+      return new Promise(resolve => { if (!speak(text,resolve)) resolve('unavailable'); });
+    }
+
     function cancel() {
-      if (microphone) finishMicrophone(microphone, '', true);
       finishSpeech();
       lastAudio = null;
     }
@@ -297,7 +205,7 @@
     root.document.addEventListener('visibilitychange', () => {
       if (root.document.visibilityState === 'hidden') cancel();
     });
-    return Object.freeze({canListen, canSpeak, listen, stop, speak, cancel});
+    return Object.freeze({canSpeak, speak, speakAndWait, unlock, cancel});
   }
 
   root.AtlasHiringVoice = Object.freeze({create});

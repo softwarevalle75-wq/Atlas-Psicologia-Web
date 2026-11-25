@@ -9,6 +9,7 @@ if (html.includes('href="seleccion/"')) {
  const interviewPage = fs.readFileSync(path.join(root,'seleccion','index.html'),'utf8');
  if (interviewPage.includes('escena.js')) level.push('escena.js','voz.js','respuestas.js','consultorio.glb','entrevistador.glb','three-LICENSE.txt');
  if (interviewPage.includes('compras-ui.js')) level.push('compras.js','compras-ui.js','compras-archivo.js');
+ if (interviewPage.includes('entrevista.js')) level.push('entrevista.js','escucha.js');
  for (const file of level) if (!fs.statSync(path.join(root,'seleccion',file)).size) throw Error('Falta selección laboral: '+file);
 }
 

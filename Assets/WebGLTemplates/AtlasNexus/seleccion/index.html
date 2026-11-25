@@ -7,17 +7,19 @@
   <meta name="theme-color" content="#101c21">
   <meta name="description" content="Practica una entrevista laboral y revisa evidencias frente al perfil de INNOVARQ.">
   <title>Selección laboral · Atlas</title>
-  <link rel="stylesheet" href="seleccion.css?v=0.1.10">
+  <link rel="stylesheet" href="seleccion.css?v=0.1.12">
   <script src="profiles.js" defer></script>
-  <script src="evaluacion.js?v=0.1.11" defer></script>
-  <script src="respuestas.js?v=0.1.11" defer></script>
+  <script src="evaluacion.js?v=0.1.12" defer></script>
+  <script src="respuestas.js?v=0.1.12" defer></script>
   <script src="../atlas-config.js" defer></script>
-  <script src="voz.js?v=0.1.11" defer></script>
-  <script src="escena.js?v=0.1.8" defer></script>
-  <script src="compras.js?v=0.1.11" defer></script>
-  <script src="compras-ui.js?v=0.1.11" defer></script>
-  <script src="compras-archivo.js?v=0.1.11" defer></script>
-  <script src="seleccion.js?v=0.1.11" defer></script>
+  <script src="voz.js?v=0.1.12" defer></script>
+  <script src="escena.js?v=0.1.12" defer></script>
+  <script src="compras.js?v=0.1.12" defer></script>
+  <script src="compras-ui.js?v=0.1.12" defer></script>
+  <script src="compras-archivo.js?v=0.1.12" defer></script>
+  <script src="escucha.js?v=0.1.12" defer></script>
+  <script src="entrevista.js?v=0.1.12" defer></script>
+  <script src="seleccion.js?v=0.1.12" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#workbench">Ir al contenido</a>
@@ -30,7 +32,7 @@
 
   <main class="stage">
     <figure class="office" aria-label="Oficina de entrevistas de INNOVARQ">
-      <img class="office-image" src="office.webp" alt="Entrevistador sentado frente al escritorio en una oficina de INNOVARQ" fetchpriority="high">
+      <img class="office-image" src="office.webp?v=0.1.12" alt="Entrevistador sentado frente al escritorio en una oficina de INNOVARQ" fetchpriority="high">
       <canvas id="office-3d" class="office-render" aria-hidden="true"></canvas>
       <figcaption class="office-caption">
         <span class="office-caption-marker" aria-hidden="true"></span>
@@ -51,52 +53,67 @@
       <section id="interview" class="view" aria-label="Entrevista">
         <section id="setup" class="flow">
           <h1>Entrevista de selección</h1>
-          <p class="lede">Elige el cargo y responde con tus propias palabras. El entrevistador puede pedirte que amplíes lo que contaste.</p>
+          <p class="lede">Elige el cargo. El entrevistador hará preguntas en voz alta y te escuchará al terminar. Al final verás tu informe.</p>
           <div class="field">
             <label for="cargo">Cargo</label>
             <select id="cargo"></select>
           </div>
           <div id="profile-meta" class="profile-meta"></div>
+          <p class="hint">Permite el micrófono al iniciar. El servicio procesa la voz en línea y muestra la transcripción durante la entrevista. La evaluación es orientativa.</p>
           <section id="pilot-intro" class="pilot-intro" aria-labelledby="pilot-intro-title" hidden>
             <h2 id="pilot-intro-title">Mesa de compras</h2>
             <p>Resuelve tres decisiones de obra. El reclutador podrá contrastar tus respuestas con los criterios del cargo.</p>
-            <button id="begin-compras" type="button" class="button button-primary">Iniciar piloto de Compras</button>
+            <button id="begin-compras" type="button" class="button button-primary">Iniciar entrevista de Compras por voz</button>
           </section>
           <div class="actions">
-            <button id="begin" type="button" class="button button-primary">Comenzar entrevista</button>
+            <button id="begin" type="button" class="button button-primary">Comenzar entrevista por voz</button>
           </div>
         </section>
 
-        <section id="compras-flow" class="flow" aria-label="Piloto de Compras y Logística" hidden></section>
-        <section id="interview-flow" class="flow" aria-label="Pregunta de entrevista" hidden>
-          <div class="question-meta">
-            <p id="question-step"></p>
-            <p id="question-skill"></p>
+        <section id="interview-flow" class="flow voice-interview" aria-label="Sesión de entrevista por voz" hidden>
+          <div id="voice-interview-panel">
+            <header class="voice-session-head">
+              <div><span class="voice-eyebrow">Sesión de entrevista</span><p id="voice-role-name"></p></div>
+              <time id="voice-interview-time" aria-label="Tiempo transcurrido">00:00</time>
+            </header>
+            <div class="voice-state-row">
+              <span class="voice-status-dot" aria-hidden="true"></span>
+              <p id="voice-interview-status" role="status"></p>
+            </div>
+            <div class="voice-question">
+              <div class="question-meta"><p id="question-step"></p><p id="question-skill"></p></div>
+              <h2 id="question-title"></h2>
+              <details id="voice-case" hidden><summary>Ver datos del caso</summary><p id="voice-case-detail"></p></details>
+            </div>
+            <section class="voice-transcription" aria-label="Transcripción en directo">
+              <h3>Tu respuesta</h3>
+              <p id="voice-interview-caption"></p>
+              <span id="voice-interview-engine"></span>
+            </section>
+            <div class="actions voice-session-controls">
+              <button id="voice-interview-retry" type="button" class="button button-primary" hidden>Activar micrófono</button>
+              <button id="voice-interview-stop" type="button" class="button button-primary" hidden>Terminé de hablar</button>
+              <button id="voice-interview-repeat" type="button" class="button button-secondary">Repetir pregunta</button>
+              <button id="voice-interview-finish" type="button" class="button button-text">Finalizar y evaluar</button>
+            </div>
+            <p class="voice-command-hint">Puedes decir «repite la pregunta» o «finalizar entrevista» cuando el micrófono esté activo.</p>
           </div>
-          <h2 id="question-title" class="question-title" tabindex="-1"></h2>
-          <div class="actions voice-actions">
-            <button id="hear" type="button" class="button button-text">Escuchar pregunta</button>
-            <button id="record-answer" type="button" class="button button-secondary" aria-pressed="false">Responder por voz</button>
-          </div>
-          <p class="voice-hint hint" id="voice-hint"></p>
-          <div id="open-area" class="field">
-            <label for="open-answer">Tu respuesta</label>
-            <textarea id="open-answer" rows="6" maxlength="2400"></textarea>
-          </div>
-          <div class="actions">
-            <button id="next" type="button" class="button button-primary">Enviar respuesta</button>
-            <button id="skip-open" type="button" class="button button-text">Omitir pregunta</button>
-          </div>
-        </section>
-
-        <section id="results" class="flow" aria-label="Resultados de la entrevista" hidden>
-          <h2 tabindex="-1">Resultados de tu entrevista</h2>
-          <div id="scorecards" class="score-grid"></div>
-          <div id="answer-review" class="review-list"></div>
-          <div class="actions">
-            <button id="repeat" type="button" class="button button-primary">Nueva entrevista</button>
-            <button id="compare-now" type="button" class="button button-secondary">Comparar resultados</button>
-          </div>
+          <section id="voice-report" aria-label="Informe de la entrevista" hidden>
+            <header class="voice-report-head">
+              <div id="voice-report-ring" class="voice-report-ring"><strong id="voice-report-score"></strong><span>Evidencias</span></div>
+              <div><span class="voice-eyebrow">Informe por competencias</span><h2 id="voice-report-heading" tabindex="-1">Resultados de la entrevista</h2>
+              <p id="voice-report-coverage"></p></div>
+            </header>
+            <p id="voice-report-summary"></p>
+            <div id="voice-report-criteria" class="voice-criteria-grid"></div>
+            <p id="voice-report-next" class="voice-next-step"></p>
+            <details class="voice-report-details"><summary>Ver transcripción de la entrevista</summary><div id="voice-report-transcript"></div></details>
+            <div class="actions voice-session-controls">
+              <button id="compare-now" type="button" class="button button-primary">Comparar resultados</button>
+              <button id="voice-report-export" type="button" class="button button-secondary" hidden>Descargar respuestas</button>
+              <button id="repeat" type="button" class="button button-text">Nueva entrevista</button>
+            </div>
+          </section>
         </section>
       </section>
 
@@ -152,7 +169,7 @@
           <button id="sample-data" type="button" class="button button-secondary">Cargar resultados de ejemplo</button>
         </div>
         <div id="comparison" aria-live="polite"></div>
-        <p class="hint">Los resultados de práctica se guardan en este navegador. Usa casos ficticios para la comparación.</p>
+        <p class="hint">Las respuestas de Compras duran hasta que cierres o recargues esta pestaña. Puedes descargarlas desde el informe para revisarlas después.</p>
       </section>
 
       <footer class="workbench-footer">
@@ -167,6 +184,7 @@
             <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/situational-judgment-tests/" target="_blank" rel="noopener noreferrer">Ejercicios de juicio situacional, OPM</a></li>
             <li><a href="https://incuvia.com/wp-content/uploads/2022/10/Chiavenato-Idalberto-2009-Comportamiento-organizacional-2-Ed.pdf" target="_blank" rel="noopener noreferrer">Comportamiento organizacional, Chiavenato</a></li>
             <li><a href="https://jgestiondeltalentohumano.wordpress.com/wp-content/uploads/2013/11/gestion-del-talento-humano-idalberto-chiavenato-3th.pdf" target="_blank" rel="noopener noreferrer">Gestión del talento humano, Chiavenato</a></li>
+            <li><a href="https://www.innerscene.com/tools/library/3d-parts/sit-down-and-stand-up-jordan-3d-person-animated-c679779d" target="_blank" rel="noopener noreferrer">Modelo base del entrevistador, Innerscene (CC0)</a></li>
           </ul>
         </details>
       </footer>
