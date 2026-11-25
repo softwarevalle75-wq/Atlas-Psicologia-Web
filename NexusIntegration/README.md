@@ -47,7 +47,7 @@ La fábrica guarda el JWT completo de aplicación exclusivamente en memoria del 
  allowfullscreen></iframe>
 ```
 
-El iframe apunta a Atlas publicado. El portal autenticado debe abrir el iframe para habilitar la voz.
+El iframe apunta a Atlas publicado. La integración autenticada asocia la sesión al alumno y al curso. Quienes abren la página pública pueden hablar con Atlas y con María como visitantes.
 
 ```js
 import {attachAtlas} from './atlas-host.mjs';

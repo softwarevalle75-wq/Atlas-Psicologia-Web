@@ -395,3 +395,6 @@ noscript { display: block; padding: 1rem; background: var(--paper); color: var(-
 @media(max-width:720px) and (orientation:portrait) {
   .interview-active #compras-flow :is(h2,button,textarea) {scroll-margin-top: calc(clamp(152px,27svh,218px) + 1.1rem)}
 }
+
+.selection-home {margin-inline-start:auto; display:inline-flex; align-items:center; min-height:44px; padding-inline:.4rem; color:#fff1df; font-weight:650; text-decoration:underline; text-underline-offset:.25rem; white-space:nowrap}
+.selection-home:hover,.selection-home:focus-visible {color:#ffd6ae}

@@ -2,19 +2,19 @@
 
 ▶ **[Abrir Atlas en el navegador](https://softwarevalle75-wq.github.io/Atlas-Psicologia-Web/)**
 
-Este enlace abre la aplicación. Para acceder a la voz con IA, Nexus debe entregar una sesión válida.
+Abre el enlace, elige Anatomía o la entrevista con María y permite el micrófono para hablar. El botón **Menú de inicio** del panel vuelve a la pantalla donde se elige la actividad.
 
 Copia independiente de Atlas para Unity **6000.4.10f1**, preparada para navegador de PC, celular y WebVR. Incluye anatomía, Atlas, María, cuatro casos educativos, misiones y juegos.
 
-**La distribución utiliza archivos estáticos de GitHub Pages. No requiere LabKey ni un Gateway adicional.** La conversación con IA utiliza el backend Atlas existente mediante LiveKit y un token temporal que entrega Nexus. Las claves de proveedores permanecen en el servidor.
+GitHub Pages distribuye el cliente estático. Para las visitas públicas, el backend de Atlas entrega un pase temporal de voz al navegador. Nexus también puede vincular una cuenta de alumno. Las credenciales de proveedores permanecen en el servidor.
 
 ## Entrega al colaborador
 
-1. Descargar `Atlas-Psicologia-Web.zip` de la release `web-v0.1.5`.
+1. Descargar `Atlas-Psicologia-Web.zip` de la versión `web-v0.1.10` o posterior.
 2. Descomprimirlo: `index.html`, `Build/`, `StreamingAssets/` y los archivos de interfaz deben conservarse juntos.
 3. Publicarlo desde la raíz de un sitio HTTPS. Los recursos usan rutas relativas y admiten la subcarpeta de un repositorio de GitHub Pages.
 4. Para usar el workflow preparado, habilitar **Settings → Pages → GitHub Actions** y ejecutar **Publicar build en GitHub Pages** con la etiqueta de la release.
-5. Integrar la sesión de Nexus siguiendo [INTEGRACION-NEXUS.txt](Docs/INTEGRACION-NEXUS.txt).
+5. Si la plataforma necesita vincular el avance a la cuenta de un alumno, seguir la [integración opcional de Nexus](Docs/INTEGRACION-NEXUS.txt).
 
 El repositorio y la aplicación de GitHub Pages son **públicos**. El colaborador puede abrir el enlace anterior o integrar la aplicación en Nexus. GitHub Free permite Pages en repositorios públicos; Pages desde un repositorio privado requiere un plan compatible. [Documentación de GitHub](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
 
@@ -22,7 +22,7 @@ El repositorio y la aplicación de GitHub Pages son **públicos**. El colaborado
 
 El transporte web conserva LiveKit, los comandos de Atlas, el contexto de la pieza y las respuestas de la paciente. Mantiene la voz seleccionada en el backend.
 
-El backend ya emite JWT web de diez minutos y permite el origen actual de Pages en CORS. Para conversar desde la cuenta del alumno falta montar los módulos incluidos en el inicio de sesión y la matrícula del Nexus real. **La IA no se habilita colocando claves privadas en este repositorio.** Sin sesión se puede explorar y guardar avance local, pero no se presenta una conexión de voz inexistente como funcional.
+La visita pública obtiene un pase de diez minutos en `POST /api/v1/atlas/web/public-session` y guarda su avance en el navegador. El servidor aplica cuotas de uso a la voz pública. Al cambiar de dominio de publicación, configura su origen HTTPS en `ATLAS_WEB_ORIGINS` del backend.
 
 ## Proyecto Unity
 
@@ -88,6 +88,6 @@ La conexión con el inicio de sesión y la matrícula debe montarse en el reposi
 
 ## Comprobar el micrófono
 
-En el panel **Asistente**, pulsa **Probar micrófono**, permite el acceso y habla. El medidor muestra la señal durante ocho segundos; no graba ni envía audio. Distingue permiso bloqueado, dispositivo ausente y ausencia de señal. Abrir Pages sin una sesión de Nexus permite esta prueba local, pero no activa la conversación con IA.
+En el panel **Asistente**, pulsa **Probar micrófono** para comprobar la entrada durante ocho segundos. Para conversar con Atlas o María, mantén pulsado **Hablar** mientras haces la pregunta y suelta al terminar.
 
-Selecciona **Entrada de micrófono** para elegir el dispositivo de tus auriculares. **Actualizar entradas** vuelve a consultar los dispositivos sin grabar audio. Al probar se muestra el nombre de la entrada abierta. La misma selección se utiliza para Atlas y María cuando Nexus habilita la conversación. La barra conserva el nivel máximo al terminar.
+Selecciona **Entrada de micrófono** para elegir el dispositivo de tus auriculares. **Actualizar entradas** vuelve a consultar los dispositivos disponibles. Atlas y María utilizan esa misma entrada.

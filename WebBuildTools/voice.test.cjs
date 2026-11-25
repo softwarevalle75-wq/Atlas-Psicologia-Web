@@ -1,6 +1,12 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const {randomUUID}=require('node:crypto');
+test('Volver al menú descarta aperturas de voz tardías y evita reabrir el micro',async()=>{
+ const f=fixture();let allowed=true;f.window.AtlasApp.sceneVoiceAllowed=()=>allowed;
+ const pending=f.voice.open('Atlas',{mode:'atlas',_epoch:1});allowed=false;await f.voice.closeAll();await pending;
+ assert.equal(f.rooms.length,0);
+ await f.voice.open('Patient',{mode:'patient',_epoch:2});assert.equal(f.rooms.length,0);
+});
 function fixture(){
  const rooms=[],messages=[],intervals=new Set(),timeouts=new Set(),listeners={},elements=[];
  class Room {

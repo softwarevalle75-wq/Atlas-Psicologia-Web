@@ -46,3 +46,10 @@
 }
 .home-actions .atlas-work-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;text-decoration:none;border-radius:11px;border:1px solid #bf9162;padding:10px 14px;color:#ffeedb;background:#412f24;font-weight:650}
 .home-actions .atlas-work-link:hover,.home-actions .atlas-work-link:focus-visible{outline:2px solid #e5b282;outline-offset:2px}
+
+#panel:not([hidden]) {display:flex; flex-direction:column}
+#panel-home {align-self:flex-start; flex:none; margin:5px 10px 0; min-height:44px; padding:6px 10px; border-color:transparent; background:transparent; color:#abeafd}
+#panel-home:hover,#panel-home:focus-visible {background:#18394a; border-color:#4a8da6}
+#panel-home span {margin-right:.24rem}
+#tabs {flex-shrink:0}
+#panel-content {flex:1; min-height:0; height:auto}

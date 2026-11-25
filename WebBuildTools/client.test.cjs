@@ -13,7 +13,7 @@ function fixture(t,mobile=false,options={}){
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 test('Carga sin configuración adicional y no hace solicitudes de autenticación',async t=>{
- const f=fixture(t);await assert.rejects(f.w.AtlasApp.api('/livekit/session',{}),/desde Nexus/);
+ let calls=0;const f=fixture(t,false,{fetch:()=>calls++});await assert.rejects(f.w.AtlasApp.api('/livekit/session',{}),/Activa la voz/);assert.equal(calls,0);
  assert.equal(f.unity.at(-1).value.profileKey,'practice');assert.equal(f.unity.at(-1).value.accessToken,'');assert.equal(f.w.document.getElementById('qr-dialog'),null);
 });
 test('Rechaza mensajes de otros dominios o ventanas',async t=>{
@@ -31,13 +31,12 @@ test('Una confirmación de progreso ajena no se presenta como guardada por Nexus
  const f=fixture(t);await f.w.AtlasApp.connect(f.session());f.post({type:'atlas:progress-ack',version:1,profileId:'student-b'});assert.notEqual(f.w.document.getElementById('sync').textContent,'Nexus confirmó la recepción del avance');
  f.post({type:'atlas:progress-ack',version:1,profileId:'student-a'});assert.equal(f.w.document.getElementById('sync').textContent,'Nexus confirmó la recepción del avance');
 });
-test('Sin sesión muestra la causa real y no presenta captura de voz activa',async t=>{
+test('Visitantes pueden activar la conversación y la prueba de micrófono es independiente',async t=>{
  const f=fixture(t);f.w.AtlasApp.receive({ready:true,landing:false,status:'Sin conexión · reintento en 8 s',talk:true,systems:[],cases:[]});
- assert.match(f.w.document.getElementById('speech-status').textContent,/IA sin sesión de Nexus/);
- assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');assert.equal(f.w.document.getElementById('talk').classList.contains('recording'),false);
- assert.equal(f.w.document.querySelector('[data-op="listen"]').disabled,true);
- let tests=0;f.w.AtlasMicrophone={test:()=>tests++,isTesting:()=>false};f.w.document.getElementById('talk').dispatchEvent(new f.w.MouseEvent('pointerdown',{bubbles:true,cancelable:true}));
- assert.equal(tests,1);assert.ok(!f.unity.some(m=>m.method==='ReceiveInput'&&m.value.talk===true));
+ assert.match(f.w.document.getElementById('speech-status').textContent,/Activa la voz/);
+ assert.equal(f.w.document.getElementById('talk').textContent,'Activar voz');assert.equal(f.w.document.getElementById('talk').classList.contains('recording'),false);
+ assert.equal(f.w.document.querySelector('[data-op="listen"]').disabled,false);
+ assert.ok(!f.unity.some(m=>m.method==='ReceiveInput'&&m.value.talk===true));
  await f.w.AtlasApp.connect(f.session());f.w.AtlasApp.receive({ready:true,landing:false,status:'Escuchando con LiveKit',talk:false,systems:[],cases:[]});
  assert.equal(f.w.document.getElementById('speech-status').textContent,'Escuchando con LiveKit');assert.equal(f.w.document.querySelector('[data-op="listen"]').disabled,false);
 });
@@ -90,7 +89,7 @@ test('Access links reject app tokens, another origin, expired tokens, and embedd
   const f=fixture(t,true,{hash:'#atlas_voice='+token,topLevel,fetch:async()=>{calls++;}});
   await tick();
   assert.equal(f.w.location.hash,'');
-  assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');
+  assert.equal(f.w.document.getElementById('talk').textContent,'Activar voz');
  }
  assert.equal(calls,0);
 });
@@ -99,7 +98,82 @@ test('A rejected access link or unavailable LiveKit cannot enable voice',async t
   const f=fixture(t,true,{hash:'#atlas_voice='+privatePass(),topLevel:true,fetch:async()=>health});
   await tick();
   assert.equal(f.w.location.hash,'');
-  assert.equal(f.w.document.getElementById('talk').textContent,'Probar micrófono');
+  assert.equal(f.w.document.getElementById('talk').textContent,'Activar voz');
   assert.match(f.w.document.getElementById('speech-status').textContent,/acceso temporal|no está disponible/);
+ }
+});
+
+const guestToken='test-guest-scoped-for-anonymous-voice-xxxxxxxxxx';
+function publicPass(ttl=600000){return {ok:true,status:200,json:async()=>({accessToken:guestToken,expiresAt:Date.now()+ttl,profileId:'guest-example'})};}
+test('Atlas y María obtienen acceso público desde una página directa o incrustada; los borradores son locales',async t=>{
+ for(const [op,topLevel] of [['start_atlas',true],['start_patient',false]]){
+  const calls=[];const f=fixture(t,false,{topLevel,fetch:async(url,options)=>{calls.push({url,options});return publicPass();}});
+  f.w.AtlasApp.receive({ready:true,landing:true});
+  assert.equal(calls.length,0);
+  f.w.document.querySelector('[data-op="'+op+'"]').click();await tick();
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,'https://api.example/api/v1/atlas/web/public-session');
+  assert.equal(calls[0].options.credentials,'omit');assert.equal(calls[0].options.headers.Authorization,undefined);
+  const grant=f.unity.findIndex(m=>m.method==='Configure'&&m.value.accessToken===guestToken);
+  assert.ok(grant>=0&&f.unity.findIndex(m=>m.method==='Command'&&m.value.op===op)>grant);
+  assert.equal(f.unity[grant].value.profileKey,'practice');
+  f.w.AtlasApp.save({schemaVersion:1,missions:['demo'],flags:{},poses:[]});
+  assert.equal(f.sent.some(m=>m.value.type==='atlas:progress'),false);
+  assert.ok(!JSON.stringify(f.w.localStorage).includes(guestToken));assert.equal(f.w.sessionStorage.length,0);
+  assert.equal(f.w.document.getElementById('talk').textContent,'Mantén para hablar');
+ }
+});
+test('Un límite temporal se muestra al visitante y puede reintentar sin iniciar una entrevista desconectada',async t=>{
+ let calls=0;const f=fixture(t,false,{topLevel:true,fetch:async()=>++calls===1?{ok:false,status:429}:publicPass()});
+ f.w.AtlasApp.receive({ready:true,landing:true});
+ f.w.AtlasApp.command('start_patient');await tick();
+ assert.match(f.w.document.getElementById('session-help').textContent,/límite temporal/);
+ assert.equal(f.w.document.getElementById('scene-loading').hidden,true);
+ assert.ok(!f.unity.some(m=>m.value.op==='start_patient'));
+ f.w.AtlasApp.command('start_patient');await tick();
+ assert.equal(calls,2);assert.ok(f.unity.some(m=>m.value.op==='start_patient'));
+});
+test('Un pase público retrasado no reemplaza una sesión de Nexus ni permite iniciar una sala tras volver al inicio',async t=>{
+ for(const home of [true,false]){
+  let finish;const f=fixture(t,false,{fetch:()=>new Promise(resolve=>{finish=resolve;})});
+  f.w.AtlasApp.receive({ready:true,landing:true});
+  f.w.AtlasApp.command('start_patient');
+  if(home)f.w.AtlasApp.command('home');else await f.w.AtlasApp.connect(f.session());
+  finish(publicPass());await tick();
+  assert.ok(!f.unity.some(m=>m.method==='Configure'&&m.value.accessToken===guestToken));
+  if(home)assert.ok(!f.unity.some(m=>m.value.op==='start_patient'));
+  else assert.ok(f.unity.some(m=>m.value.profileKey==='student-a'));
+ }
+});
+test('Al caducar el pase se recupera la voz sin cambiar el perfil ni enviar al menú',async t=>{
+ let calls=0;const f=fixture(t,false,{topLevel:true,fetch:async()=>publicPass(++calls===1?35:600000)});
+ f.w.AtlasApp.command('start_atlas');await tick();await new Promise(resolve=>setTimeout(resolve,70));
+ assert.equal(f.w.document.getElementById('talk').textContent,'Activar voz');
+ f.w.AtlasApp.command('listen');await tick();
+ assert.equal(calls,2);assert.equal(f.w.document.getElementById('talk').textContent,'Mantén para hablar');assert.ok(!f.unity.some(m=>m.value.op==='home'));
+});
+
+
+test('Panel y entrevista regresan al menú de inicio de Unity en PC y celular', t => {
+ for(const mobile of [false,true]){
+  const {w,unity}=fixture(t,mobile);
+  const doc=w.document, get=id=>doc.getElementById(id);
+  const ready=(landing,patientOpen=false)=>w.AtlasApp.receive({ready:true,landing,patientOpen,vr:false,systems:[],cases:[],missions:[]});
+  for(const [control,patient] of [['panel-home',false],['patient-home',true]]){
+   ready(false,patient);
+   if(get('panel').hidden)get('menu-toggle').click();
+   if(patient)doc.querySelector('[data-tab="patient"]').click();
+   const button=get(control);
+   assert.equal(button.closest('[hidden]'),null);
+   assert.match(button.textContent,/menú de inicio/i);
+   button.click();
+   assert.equal(unity.filter(item=>item.method==='Command').at(-1).value.op,'home');
+   ready(true);
+   assert.equal(get('home').hidden,false);
+   assert.equal(get('panel').hidden,true);
+   assert.equal(get('voice-dock').hidden,true);
+   assert.ok(get('home').querySelector('[data-op="start_patient"]'));
+   assert.ok(get('home').querySelector('[data-op="start_atlas"]'));
+  }
  }
 });
