@@ -348,3 +348,50 @@ noscript { display: block; padding: 1rem; background: var(--paper); color: var(-
  .interview-active :is(#question-title,#open-answer,#options input,#record-answer,#next){scroll-margin-top:calc(clamp(152px,27svh,218px) + 1.1rem)}
 }
 @media(prefers-reduced-motion:reduce){.office-render{transition:none}}
+
+.pilot-intro {
+  display: grid;
+  justify-items: start;
+  gap: .6rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #ceb99f;
+  border-inline-start: 4px solid var(--copper);
+  border-radius: .55rem;
+  background: var(--surface);
+}
+.pilot-intro h2 {font-size: 1.55rem}
+.pilot-report .stage {display: block}
+.pilot-report .office {display: none}
+.pilot-report .workbench {
+  width: min(100%, 86rem);
+  min-height: calc(100svh - var(--bar-height));
+  margin-inline: auto;
+  border: 0;
+}
+.pilot-report .view-nav {align-self: start}
+.pilot-intro p, .pilot-comparison p {margin: .18rem 0 .52rem}
+.pilot-brief {
+  padding: .85rem 1rem;
+  border-inline-start: 3px solid var(--copper);
+  background: var(--surface);
+  white-space: pre-line;
+}
+.pilot-consent {display: flex; align-items: baseline; gap: .4rem}
+.pilot-anchors {margin: 0; padding: .8rem; border: 1px solid var(--line); border-radius: .48rem}
+.pilot-anchors legend {padding-inline: .3rem; font-weight: 750}
+.pilot-scale {padding-inline-start: 1.2rem}
+.pilot-scale li + li {margin-top: .38rem}
+.pilot-review blockquote, .pilot-comparison td {overflow-wrap: anywhere; white-space: pre-wrap}
+.pilot-review blockquote {margin: 0; padding: .3rem .72rem; border-left: 2px solid var(--copper)}
+.pilot-actions [aria-pressed=true] {background: var(--copper-pale); border-color: var(--copper)}
+#compras-comparison .table-scroll table {table-layout: auto; font-size: .86rem}
+#pilot-matrix {min-width: 44rem}
+#pilot-matrix :is(td,th) {width: auto; min-width: 6.4rem; vertical-align: top}
+#pilot-matrix .hint {font-size: .78rem}
+#pilot-answers-table {min-width: 26rem}
+#pilot-answers-table :is(td,th) {min-width: 6rem; vertical-align: top}
+#pilot-transfer summary {font-weight: 700; cursor: pointer}
+#compras-flow :is(button,textarea) {scroll-margin-top: var(--bar-height)}
+@media(max-width:720px) and (orientation:portrait) {
+  .interview-active #compras-flow :is(h2,button,textarea) {scroll-margin-top: calc(clamp(152px,27svh,218px) + 1.1rem)}
+}

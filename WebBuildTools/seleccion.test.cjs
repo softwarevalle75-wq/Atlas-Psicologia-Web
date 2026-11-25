@@ -24,7 +24,7 @@ function app(t, microphone = false) {
       }
     };
   }
-  for (const file of ['profiles.js', 'evaluacion.js', 'respuestas.js', 'voz.js', 'seleccion.js']) {
+  for (const file of ['profiles.js', 'evaluacion.js', 'respuestas.js', 'voz.js', 'compras.js', 'compras-ui.js', 'compras-archivo.js', 'seleccion.js']) {
     window.eval(fs.readFileSync(path.join(dir, file), 'utf8'));
   }
   t.after(() => window.close());

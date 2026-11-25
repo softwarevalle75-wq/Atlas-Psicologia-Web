@@ -30,6 +30,26 @@
     onSpeaking: active => {speaking = active;updateActivity();},
     onListening: active => {listening = active;updateActivity();},
   });
+  const pilotRole = window.AtlasComprasPilot.profileId;
+  const pilot = window.AtlasComprasUI.mount({
+    flow: byId('compras-flow'), comparison: byId('compras-comparison'), voice, notice, animate: animateFeedback,
+    onExit: closePilot,
+    onExport: entry => window.AtlasComprasArchivo.download(entry),
+    onCompare: () => {
+      closePilot();
+      byId('compare-cargo').value = pilotRole;
+      switchView('compare');
+    },
+  });
+  window.AtlasComprasArchivo.bindImport(byId('pilot-import'), byId('pilot-import-status'), pilot);
+
+  function closePilot() {
+    voice.cancel();
+    byId('compras-flow').hidden = true;
+    byId('setup').hidden = false;
+    document.body.classList.remove('interview-active');
+    byId('begin-compras').focus();
+  }
 
   function updateActivity() {
     const mode = listening ? 'listening' : speaking ? 'talking' : gesture || 'idle';
@@ -42,6 +62,7 @@
     byId('next').disabled = listening;
     byId('hear').disabled = listening || !voice.canSpeak;
     byId('skip-open').disabled = listening;
+    pilot.setListening(listening);
   }
 
   function animateFeedback(next) {
@@ -52,6 +73,7 @@
   }
 
   function receiveTranscript(raw) {
+    if (view === 'interview' && pilot.receiveTranscript(raw)) return;
     if (!interview || interview.entry || view !== 'interview') return;
     if (!current()) {
       const field = byId('open-answer');
@@ -114,7 +136,8 @@
     voice.cancel();
     animateFeedback('');
     view = next;
-    document.body.classList.toggle('interview-active', next === 'interview' && !!interview && !interview.entry);
+    if (next !== 'compare') document.body.classList.remove('pilot-report');
+    document.body.classList.toggle('interview-active', next === 'interview' && (pilot.active || (!!interview && !interview.entry)));
     scene?.setVisible(next === 'interview');
     for (const button of document.querySelectorAll('[data-view]')) {
       const active = button.dataset.view === next;
@@ -134,6 +157,10 @@
 
   function showProfile() {
     const profile = profileFor('cargo');
+    byId('pilot-intro').hidden = profile.id !== pilotRole;
+    byId('begin').textContent = profile.id === pilotRole ? 'Practicar la entrevista general' : 'Comenzar entrevista';
+    byId('begin').classList.toggle('button-primary', profile.id !== pilotRole);
+    byId('begin').classList.toggle('button-secondary', profile.id === pilotRole);
     const meta = byId('profile-meta');
     meta.replaceChildren(
       element('p', profile.objective),
@@ -392,6 +419,11 @@
 
   function renderComparison() {
     const profile = profileFor('compare-cargo');
+    const hasPilot = profile.id === pilotRole;
+    document.body.classList.toggle('pilot-report', hasPilot && view === 'compare');
+    byId('compras-comparison').hidden = !hasPilot;
+    byId('pilot-transfer').hidden = !hasPilot;
+    if (hasPilot) pilot.renderComparison();
     const report = byId('comparison');
     const currentAttempts = attempts.filter(entry => openRubric.isSummary(entry.open));
     const older = attempts.filter(entry => entry.role === profile.id && !openRubric.isSummary(entry.open));
@@ -419,6 +451,14 @@
     byId('resume-output').replaceChildren();
   });
   byId('begin').addEventListener('click', startInterview);
+  byId('begin-compras').addEventListener('click', () => {
+    if (profileFor('cargo').id !== pilotRole) return;
+    byId('setup').hidden = true;
+    byId('compras-flow').hidden = false;
+    document.body.classList.add('interview-active');
+    notice('');
+    pilot.start();
+  });
   byId('next').addEventListener('click', advance);
   byId('compare-now').addEventListener('click', () => switchView('compare'));
   byId('repeat').addEventListener('click', () => {
@@ -457,6 +497,9 @@
   });
   window.addEventListener('pagehide', () => voice.cancel());
 
+  if (new URLSearchParams(window.location.search).get('piloto') === 'compras') {
+    for (const id of ['cargo', 'compare-cargo', 'resume-cargo']) byId(id).value = pilotRole;
+  }
   showProfile();
   switchView('interview');
 })();

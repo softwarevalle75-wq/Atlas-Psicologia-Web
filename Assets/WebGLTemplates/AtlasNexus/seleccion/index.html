@@ -7,13 +7,16 @@
   <meta name="theme-color" content="#101c21">
   <meta name="description" content="Practica una entrevista laboral y revisa evidencias frente al perfil de INNOVARQ.">
   <title>Selección laboral · Atlas</title>
-  <link rel="stylesheet" href="seleccion.css?v=0.1.8">
+  <link rel="stylesheet" href="seleccion.css?v=0.1.9">
   <script src="profiles.js" defer></script>
   <script src="evaluacion.js?v=0.1.8" defer></script>
   <script src="respuestas.js?v=0.1.8" defer></script>
   <script src="voz.js?v=0.1.8" defer></script>
   <script src="escena.js?v=0.1.8" defer></script>
-  <script src="seleccion.js?v=0.1.8" defer></script>
+  <script src="compras.js?v=0.1.9" defer></script>
+  <script src="compras-ui.js?v=0.1.9" defer></script>
+  <script src="compras-archivo.js?v=0.1.9" defer></script>
+  <script src="seleccion.js?v=0.1.9" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#workbench">Ir al contenido</a>
@@ -52,11 +55,17 @@
             <select id="cargo"></select>
           </div>
           <div id="profile-meta" class="profile-meta"></div>
+          <section id="pilot-intro" class="pilot-intro" aria-labelledby="pilot-intro-title" hidden>
+            <h2 id="pilot-intro-title">Mesa de compras</h2>
+            <p>Resuelve tres decisiones de obra. El reclutador podrá contrastar tus respuestas con los criterios del cargo.</p>
+            <button id="begin-compras" type="button" class="button button-primary">Iniciar piloto de Compras</button>
+          </section>
           <div class="actions">
             <button id="begin" type="button" class="button button-primary">Comenzar entrevista</button>
           </div>
         </section>
 
+        <section id="compras-flow" class="flow" aria-label="Piloto de Compras y Logística" hidden></section>
         <section id="interview-flow" class="flow" aria-label="Pregunta de entrevista" hidden>
           <div class="question-meta">
             <p id="question-step"></p>
@@ -129,6 +138,15 @@
           <label for="compare-cargo">Cargo</label>
           <select id="compare-cargo"></select>
         </div>
+        <div id="compras-comparison" class="flow" hidden></div>
+        <details id="pilot-transfer" class="review-item" hidden>
+          <summary>Importar respuestas de otro dispositivo</summary>
+          <p>Elige el archivo JSON que descargó el participante al finalizar el piloto. Las respuestas se añadirán a este navegador para su revisión.</p>
+          <div class="field"><label for="pilot-import">Archivo de respuestas de Atlas</label>
+            <input type="file" id="pilot-import" accept=".json,application/json">
+          </div>
+          <p class="hint" id="pilot-import-status" role="status"></p>
+        </details>
         <div class="actions">
           <button id="sample-data" type="button" class="button button-secondary">Cargar resultados de ejemplo</button>
         </div>
@@ -141,6 +159,8 @@
           <summary>Referencias y metodología</summary>
           <p>La entrevista usa preguntas del cargo, ejercicios de trabajo y criterios comunes para comparar evidencias.</p>
           <ul>
+            <li><a href="https://www.gov.uk/guidance/civil-service-online-tests" target="_blank" rel="noopener noreferrer">Práctica de razonamiento numérico y juicio situacional, Civil Service (inglés)</a></li>
+            <li><a href="https://eu-careers.europa.eu/sites/default/files/documents/general/sample_tests/e-tray/es_e-tray_es_final.pdf" target="_blank" rel="noopener noreferrer">Ejercicio de bandeja de entrada, ejemplo en español de EU Careers (PDF)</a></li>
             <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/structured-interviews/" target="_blank" rel="noopener noreferrer">Entrevistas estructuradas, OPM</a></li>
             <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/work-samples-and-simulations/" target="_blank" rel="noopener noreferrer">Muestras de trabajo y simulaciones, OPM</a></li>
             <li><a href="https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/situational-judgment-tests/" target="_blank" rel="noopener noreferrer">Ejercicios de juicio situacional, OPM</a></li>
