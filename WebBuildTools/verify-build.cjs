@@ -6,6 +6,8 @@ if(html.includes('{{{')||html.includes('gatewayUrl')||html.includes('labKey'))th
 for(const file of ['atlas-client.js','atlas-voice.js','atlas-config.js','livekit-client.js','atlas.css'].concat(html.includes('atlas-microphone.js')?['atlas-microphone.js']:[],html.includes('atlas-touch.js')?['atlas-touch.js']:[]))if(!fs.statSync(path.join(root,file)).size)throw Error('Falta '+file);
 if (html.includes('href="seleccion/"')) {
  const level = ['index.html','seleccion.css','profiles.js','evaluacion.js','seleccion.js','office.webp'];
+ const interviewPage = fs.readFileSync(path.join(root,'seleccion','index.html'),'utf8');
+ if (interviewPage.includes('escena.js')) level.push('escena.js','voz.js','respuestas.js','consultorio.glb','entrevistador.glb','three-LICENSE.txt');
  for (const file of level) if (!fs.statSync(path.join(root,'seleccion',file)).size) throw Error('Falta selección laboral: '+file);
 }
 

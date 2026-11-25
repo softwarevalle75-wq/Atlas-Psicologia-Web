@@ -2,13 +2,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bundle": "esbuild livekit-entry.js --bundle --format=iife --global-name=LivekitClient --minify --outfile=../Assets/WebGLTemplates/AtlasNexus/livekit-client.js"
+    "bundle": "esbuild livekit-entry.js --bundle --format=iife --global-name=LivekitClient --minify --outfile=../Assets/WebGLTemplates/AtlasNexus/livekit-client.js",
+    "bundle:seleccion": "esbuild seleccion-3d-entry.js --bundle --format=iife --minify --outfile=../Assets/WebGLTemplates/AtlasNexus/seleccion/escena.js"
   },
   "dependencies": {
     "livekit-client": "2.24.1"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "jsdom": "^26.1.0"
+    "jsdom": "^26.1.0",
+    "three": "0.187.0"
   }
 }

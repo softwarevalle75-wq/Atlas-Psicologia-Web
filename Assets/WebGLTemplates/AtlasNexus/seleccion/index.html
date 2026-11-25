@@ -7,10 +7,13 @@
   <meta name="theme-color" content="#101c21">
   <meta name="description" content="Practica una entrevista laboral y revisa evidencias frente al perfil de INNOVARQ.">
   <title>Selección laboral · Atlas</title>
-  <link rel="stylesheet" href="seleccion.css">
+  <link rel="stylesheet" href="seleccion.css?v=0.1.8">
   <script src="profiles.js" defer></script>
-  <script src="evaluacion.js" defer></script>
-  <script src="seleccion.js" defer></script>
+  <script src="evaluacion.js?v=0.1.8" defer></script>
+  <script src="respuestas.js?v=0.1.8" defer></script>
+  <script src="voz.js?v=0.1.8" defer></script>
+  <script src="escena.js?v=0.1.8" defer></script>
+  <script src="seleccion.js?v=0.1.8" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#workbench">Ir al contenido</a>
@@ -23,9 +26,11 @@
   <main class="stage">
     <figure class="office" aria-label="Oficina de entrevistas de INNOVARQ">
       <img class="office-image" src="office.webp" alt="Entrevistador sentado frente al escritorio en una oficina de INNOVARQ" fetchpriority="high">
+      <canvas id="office-3d" class="office-render" aria-hidden="true"></canvas>
       <figcaption class="office-caption">
         <span class="office-caption-marker" aria-hidden="true"></span>
         <span>Entrevistador · INNOVARQ</span>
+        <span id="office-mode" class="office-mode" aria-live="polite"></span>
       </figcaption>
     </figure>
 
@@ -58,14 +63,19 @@
             <p id="question-skill"></p>
           </div>
           <h2 id="question-title" class="question-title" tabindex="-1"></h2>
-          <button id="hear" type="button" class="button button-text">Leer pregunta</button>
+          <div class="actions voice-actions">
+            <button id="hear" type="button" class="button button-text">Escuchar pregunta</button>
+            <button id="record-answer" type="button" class="button button-secondary" aria-pressed="false">Responder por voz</button>
+          </div>
+          <p class="voice-hint hint" id="voice-hint"></p>
           <div id="options" class="answer-list" role="group" aria-labelledby="question-title"></div>
           <div id="open-area" class="field" hidden>
             <label for="open-answer">Tu respuesta</label>
-            <textarea id="open-answer" rows="6" placeholder="Cuenta qué hiciste y qué resultado obtuviste."></textarea>
+            <textarea id="open-answer" rows="6" maxlength="2400" placeholder="Cuenta qué hiciste y qué resultado obtuviste."></textarea>
           </div>
           <div class="actions">
             <button id="next" type="button" class="button button-primary">Continuar</button>
+            <button id="skip-open" type="button" class="button button-text" hidden>Omitir respuesta</button>
           </div>
         </section>
 

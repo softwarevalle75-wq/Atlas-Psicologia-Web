@@ -3,6 +3,7 @@
 
   const profiles = window.AtlasHiringProfiles;
   const evaluate = window.AtlasHiringEvaluation;
+  const openRubric = window.AtlasOpenResponse;
   const byId = id => document.getElementById(id);
   const storageKey = 'atlas.innovarq.practice.v1';
   const groupNames = {hard: 'Habilidades técnicas', soft: 'Habilidades interpersonales'};
@@ -11,6 +12,66 @@
   let demoVisible = false;
   let view = 'interview';
   let attempts = readAttempts();
+  const office = document.querySelector('.office');
+  const officeMode = byId('office-mode');
+  let speaking = false;
+  let listening = false;
+  let gesture = '';
+  let gestureTimer = 0;
+  let scene;
+  if (window.AtlasHiringScene) {
+    scene = window.AtlasHiringScene.mount(byId('office-3d'), status => {
+      officeMode.textContent = office.dataset.scene === 'fallback' ? status : '';
+    });
+  }
+  const voice = window.AtlasHiringVoice.create({
+    onTranscript: receiveTranscript,
+    onStatus: message => notice(message),
+    onSpeaking: active => {speaking = active;updateActivity();},
+    onListening: active => {listening = active;updateActivity();},
+  });
+
+  function updateActivity() {
+    const mode = listening ? 'listening' : speaking ? 'talking' : gesture || 'idle';
+    office.dataset.activity = mode;
+    officeMode.textContent = listening ? 'Escuchando' : speaking ? 'Hablando' :
+      gesture === 'thinking' ? 'Revisando respuesta' : '';
+    scene?.setMode(mode);
+    byId('record-answer').textContent = listening ? 'Terminar dictado' : 'Responder por voz';
+    byId('record-answer').setAttribute('aria-pressed', String(listening));
+    byId('next').disabled = listening;
+    byId('hear').disabled = listening || !voice.canSpeak;
+    byId('skip-open').disabled = listening;
+  }
+
+  function animateFeedback(next) {
+    clearTimeout(gestureTimer);
+    gesture = next;
+    updateActivity();
+    if (next) gestureTimer = setTimeout(() => animateFeedback(''), 1100);
+  }
+
+  function receiveTranscript(raw) {
+    if (!interview || interview.entry || view !== 'interview') return;
+    if (!current()) {
+      const field = byId('open-answer');
+      field.value = (field.value.trim() + ' ' + raw).trim().slice(0, 2400);
+      return;
+    }
+    const answer = raw.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9 ]/g, '').trim();
+    const choices = {a: 0, primera: 0, uno: 0, 1: 0, b: 1, be: 1, segunda: 1, dos: 1, 2: 1, c: 2, ce: 2, tercera: 2, tres: 2, 3: 2};
+    const parsed = answer.match(/^(?:(?:elijo |marco )?(?:la )?(?:opcion )?)?(a|b|be|c|ce|primera|segunda|tercera|uno|dos|tres|1|2|3)$/);
+    const index = parsed ? choices[parsed[1]] : undefined;
+    if (index == null) {
+      notice('Entendí «' + raw + '». Di «opción A», «opción B» o «opción C», o toca la respuesta.');
+      return;
+    }
+    const input = byId('options').querySelectorAll('input')[index];
+    if (input) {
+      input.checked = true;
+      notice('Marqué la opción ' + 'ABC'[index] + '. Confirma con Continuar.');
+    }
+  }
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -35,11 +96,11 @@
     }
   }
 
-  function addAttempt(profile, answers) {
+  function addAttempt(profile, answers, assessment) {
     const saved = readAttempts();
     if (saved.length) attempts = saved;
     const max = attempts.reduce((number, item) => Math.max(number, Number(item.name.slice(10)) || 0), 0);
-    const entry = {name: 'Candidato ' + String(max + 1).padStart(2, '0'), role: profile.id, answers: {...answers}};
+    const entry = {name: 'Candidato ' + String(max + 1).padStart(2, '0'), role: profile.id, answers: {...answers}, open: openRubric.summarize(assessment)};
     attempts = [...attempts, entry].slice(-100);
     try {
       localStorage.setItem(storageKey, JSON.stringify(attempts));
@@ -50,8 +111,11 @@
   }
 
   function switchView(next) {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    voice.cancel();
+    animateFeedback('');
     view = next;
+    document.body.classList.toggle('interview-active', next === 'interview' && !!interview && !interview.entry);
+    scene?.setVisible(next === 'interview');
     for (const button of document.querySelectorAll('[data-view]')) {
       const active = button.dataset.view === next;
       button.setAttribute('aria-pressed', String(active));
@@ -79,27 +143,36 @@
   }
 
   function startInterview() {
-    interview = {profile: profileFor('cargo'), next: 0, answers: Object.create(null), open: '', entry: null};
+    interview = {profile: profileFor('cargo'), next: 0, answers: Object.create(null), openAnswers: [], followUps: [], assessment: null, entry: null};
     byId('setup').hidden = true;
     byId('results').hidden = true;
     byId('interview-flow').hidden = false;
+    document.body.classList.add('interview-active');
     byId('open-answer').value = '';
-    renderQuestion();
+    renderQuestion(true);
   }
 
   function current() {
     return interview.profile.questions[interview.next];
   }
 
-  function renderQuestion() {
-    const {profile, next} = interview;
+  function renderQuestion(readAloud) {
+    const {profile, next, followUps} = interview;
     const question = current();
+    const follow = followUps.at(-1);
     const title = byId('question-title');
-    byId('question-step').textContent = 'Pregunta ' + (next + 1) + ' de ' + (profile.questions.length + 1);
-    byId('question-skill').textContent = question ? groupNames[question.group] + ' · ' + question.skill : 'Respuesta abierta';
-    title.textContent = question?.prompt || profile.open.prompt;
-    byId('next').textContent = question ? 'Continuar' : 'Ver resultados';
+    byId('question-step').textContent = question ? 'Ejercicio ' + (next + 1) + ' de ' + profile.questions.length :
+      follow ? 'Repregunta ' + followUps.length : 'Entrevista abierta';
+    byId('question-skill').textContent = question ? groupNames[question.group] + ' · ' + question.skill :
+      follow ? 'Profundizar en tu respuesta' : 'Respuesta abierta · 4 puntos posibles';
+    title.textContent = question?.prompt || follow?.text || profile.open.prompt;
+    byId('next').textContent = question ? 'Continuar' : 'Enviar respuesta';
     byId('open-area').hidden = !!question;
+    byId('skip-open').hidden = !!question;
+    byId('voice-hint').textContent = !voice.canListen ?
+      'El dictado depende del navegador. También puedes responder con los controles de la pantalla.' :
+      question ? 'Di «opción A», «opción B» u «opción C», o toca una opción. El navegador puede procesar el audio en línea.' :
+      'Dicta tu respuesta y revisa la transcripción antes de enviarla. El navegador puede procesar el audio en línea.';
     const wrapper = byId('options');
     wrapper.hidden = !question;
     wrapper.replaceChildren();
@@ -111,17 +184,36 @@
         radio.name = 'answer';
         radio.value = String(index);
         radio.addEventListener('change', () => notice(''));
-        label.append(radio, element('span', option.text));
+        label.append(radio, element('span', 'ABC'[index] + '. ' + option.text));
         wrapper.append(label);
       });
     }
     notice('');
     title.focus();
+    if (readAloud) readQuestion(false);
+  }
+
+  function readQuestion(includeOptions) {
+    if (!voice.canSpeak || view !== 'interview' || !interview || interview.entry) return;
+    const question = current();
+    let text = byId('question-title').textContent;
+    if (includeOptions && question) {
+      text += ' ' + question.options.map((option,index) => 'Opción ' + 'ABC'[index] + '. ' + option.text).join(' ');
+    }
+    voice.speak(text);
+  }
+
+  function finishInterview() {
+    if (interview.entry) return;
+    const texts = interview.openAnswers.map(item => item.text);
+    interview.assessment = openRubric.assess(interview.profile, texts);
+    interview.entry = addAttempt(interview.profile, interview.answers, interview.assessment);
+    animateFeedback('acknowledge');
+    renderResults();
   }
 
   function advance() {
-    if (!interview || interview.entry) return;
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (!interview || interview.entry || listening) return;
     const question = current();
     if (question) {
       const radio = byId('options').querySelector('input:checked');
@@ -132,12 +224,27 @@
       }
       interview.answers[question.id] = Number(radio.value);
       interview.next++;
-      renderQuestion();
+      renderQuestion(true);
       return;
     }
-    interview.open = byId('open-answer').value.trim();
-    interview.entry = addAttempt(interview.profile, interview.answers);
-    renderResults();
+    const field = byId('open-answer');
+    const text = field.value.trim();
+    if (!text) {
+      notice('Escribe o dicta tu respuesta. También puedes omitir esta pregunta.');
+      field.focus();
+      return;
+    }
+    interview.openAnswers.push({prompt: byId('question-title').textContent, text});
+    field.value = '';
+    const follow = openRubric.followUp(interview.profile, interview.openAnswers.map(item => item.text), interview.followUps.map(item => item.id));
+    if (follow) {
+      interview.followUps.push(follow);
+      animateFeedback('thinking');
+      renderQuestion(true);
+      return;
+    }
+    voice.cancel();
+    finishInterview();
   }
 
   function scorecard(label, result) {
@@ -162,38 +269,32 @@
       review.append(item);
     }
     const open = element('article', null, 'review-item');
-    open.append(element('h4', 'Respuesta abierta'), element('p', interview.profile.open.prompt));
-    if (interview.open) {
-      open.append(element('blockquote', interview.open));
-      const anchors = element('ol');
-      interview.profile.open.anchors.forEach(anchor => anchors.append(element('li', anchor)));
-      const assessment = element('select');
-      assessment.id = 'open-review-rating';
-      assessment.append(new Option('Por revisar', ''));
-      interview.profile.open.anchors.forEach((_, index) => assessment.append(new Option('Nivel ' + (index + 1), String(index + 1))));
-      const assessmentNote = element('p', 'La comparación usa las preguntas comunes puntuables.', 'hint');
-      assessment.addEventListener('change', () => {
-        assessmentNote.textContent = assessment.value
-          ? 'Nivel ' + assessment.value + ' seleccionado para esta revisión.'
-          : 'La comparación usa las preguntas comunes puntuables.';
-      });
-      const assessmentLabel = element('label', 'Valoración del evaluador');
-      assessmentLabel.htmlFor = assessment.id;
-      open.append(anchors, assessmentLabel, assessment, assessmentNote);
-    } else {
-      open.append(element('p', 'La respuesta abierta quedó sin evidencia. Puedes retomarla en otra práctica.', 'hint'));
+    open.append(element('h4', 'Evidencia de las respuestas abiertas'));
+    for (const item of interview.openAnswers) {
+      open.append(element('p', item.prompt, 'hint'), element('blockquote', item.text));
     }
+    if (!interview.openAnswers.length) open.append(element('p', 'Sin respuestas abiertas registradas.', 'hint'));
+    const list = element('ul', null, 'evidence-list');
+    for (const criterion of interview.assessment.criteria) {
+      const row = element('li');
+      row.append(element('strong', (criterion.met ? '1/1 · ' : '0/1 · ') + criterion.label),
+        element('span', criterion.description + (criterion.evidence ? ' · Evidencia: ' + criterion.evidence : '')));
+      list.append(row);
+    }
+    open.append(list, element('p', 'El puntaje automático indica evidencia en el relato y puede ser revisado por el evaluador.', 'hint'));
     review.append(open);
   }
 
   function renderResults() {
-    const summary = evaluate.score(interview.profile, interview.answers);
+    const summary = openRubric.combine(evaluate.score(interview.profile, interview.answers), interview.entry.open);
     byId('interview-flow').hidden = true;
+    document.body.classList.remove('interview-active');
     byId('results').hidden = false;
     byId('scorecards').replaceChildren(
       scorecard('Resultado de la práctica', summary),
       scorecard(groupNames.hard, summary.groups.hard),
-      scorecard(groupNames.soft, summary.groups.soft)
+      scorecard(groupNames.soft, summary.groups.soft),
+      scorecard('Respuestas abiertas', {points:summary.open.points,max:summary.open.max,percent:Math.round(100*summary.open.points/summary.open.max)})
     );
     byId('compare-cargo').value = interview.profile.id;
     writeReview(summary);
@@ -251,10 +352,10 @@
     reviewResume();
   }
 
-  function comparisonTable(profile, list, title, empty) {
+  function comparisonTable(profile, list, title, empty, includesOpen) {
     const wrapper = element('section', null, 'review-item');
     wrapper.append(element('h3', title));
-    const rows = evaluate.rank(profile, list);
+    const rows = evaluate.rank(profile, list, entry => openRubric.combine(evaluate.score(profile, entry.answers || {}), entry.open));
     if (!rows.length) {
       wrapper.append(element('p', empty, 'empty'));
       return wrapper;
@@ -267,16 +368,20 @@
     scroll.setAttribute('aria-label', title);
     const table = element('table');
     const head = table.createTHead().insertRow();
-    for (const label of ['N.º', 'Perfil', 'Técnicas', 'Blandas', 'Total']) {
+    const labels = ['N.º', 'Perfil', 'Téc.', 'Blandas', ...(includesOpen ? ['Abierta'] : []), 'Total'];
+    for (const label of labels) {
       const cell = element('th', label);
       cell.scope = 'col';
       if (label === 'N.º') cell.setAttribute('aria-label', 'Posición en la práctica');
+      if (label === 'Téc.') cell.setAttribute('aria-label', 'Habilidades técnicas');
+      if (label === 'Abierta') cell.setAttribute('aria-label', 'Respuestas abiertas');
       head.append(cell);
     }
     const body = table.createTBody();
     for (const row of rows) {
       const tr = body.insertRow();
-      for (const text of [row.position, row.entry.name, row.score.groups.hard.percent + '%', row.score.groups.soft.percent + '%', row.score.percent + '%']) {
+      const stats = [row.position, row.entry.name, row.score.groups.hard.percent + '%', row.score.groups.soft.percent + '%', ...(includesOpen ? [row.score.open.points + '/' + row.score.open.max] : []), row.score.percent + '%'];
+      for (const text of stats) {
         tr.append(element('td', text));
       }
     }
@@ -288,8 +393,17 @@
   function renderComparison() {
     const profile = profileFor('compare-cargo');
     const report = byId('comparison');
-    report.replaceChildren(comparisonTable(profile, attempts, 'Entrevistas en este dispositivo', 'Completa una entrevista para este cargo y repítela con otro participante para comparar.'));
-    if (demoVisible) report.append(comparisonTable(profile, evaluate.examples(profile), 'Ejemplos ficticios', 'Sin ejemplos.'));
+    const currentAttempts = attempts.filter(entry => openRubric.isSummary(entry.open));
+    const older = attempts.filter(entry => entry.role === profile.id && !openRubric.isSummary(entry.open));
+    report.replaceChildren(comparisonTable(profile, currentAttempts, 'Entrevistas · 12 puntos posibles', 'Completa una entrevista para este cargo y repítela con otro participante para comparar.', true));
+    if (older.length) report.append(comparisonTable(profile, older, 'Historial · ejercicios de 8 puntos', '', false));
+    if (demoVisible) {
+      const samples = evaluate.examples(profile).map((entry, index) => ({
+        ...entry,
+        open: {version: openRubric.VERSION, criteria: {context:true, action:true, result:index<2, verification:false}},
+      }));
+      report.append(comparisonTable(profile, samples, 'Ejemplos ficticios · 12 puntos posibles', '', true));
+    }
   }
 
   for (const id of ['cargo', 'resume-cargo', 'compare-cargo']) {
@@ -316,18 +430,18 @@
     showProfile();
     byId('begin').focus();
   });
-  byId('hear').disabled = !('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window);
-  byId('hear').addEventListener('click', () => {
-    if (!interview || view !== 'interview') return;
-    window.speechSynthesis.cancel();
-    const message = new SpeechSynthesisUtterance(byId('question-title').textContent);
-    message.lang = 'es-CO';
-    message.onend = () => notice('');
-    message.onerror = event => {
-      if (event.error !== 'interrupted' && event.error !== 'canceled') notice('El navegador no pudo leer la pregunta. Puedes responder con el texto en pantalla.');
-    };
-    window.speechSynthesis.speak(message);
+  byId('hear').disabled = !voice.canSpeak;
+  byId('hear').addEventListener('click', () => readQuestion(true));
+  byId('record-answer').disabled = !voice.canListen;
+  byId('record-answer').addEventListener('click', () => {
+    if (listening) voice.stop();
+    else if (interview && !interview.entry && view === 'interview') voice.listen();
   });
+  byId('skip-open').addEventListener('click', () => {
+    voice.cancel();
+    if (interview && !interview.entry && !current()) finishInterview();
+  });
+
   byId('resume-cargo').addEventListener('change', () => {
     byId('resume-output').replaceChildren();
     notice('');
@@ -341,7 +455,7 @@
     byId('sample-data').textContent = demoVisible ? 'Ocultar resultados de ejemplo' : 'Cargar resultados de ejemplo';
     renderComparison();
   });
-  window.addEventListener('pagehide', () => window.speechSynthesis?.cancel());
+  window.addEventListener('pagehide', () => voice.cancel());
 
   showProfile();
   switchView('interview');

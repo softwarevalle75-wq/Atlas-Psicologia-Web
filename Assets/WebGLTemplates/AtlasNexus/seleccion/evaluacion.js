@@ -49,9 +49,9 @@
     return {groups: totals, items, points, max, completed, percent: Math.round(100 * points / max)};
   }
 
-  function rank(profile, entries) {
+  function rank(profile, entries, evaluateEntry = entry => score(profile, entry.answers || {})) {
     const rows = entries.filter(entry => entry.role === profile.id)
-      .map(entry => ({entry, score: score(profile, entry.answers || {})}))
+      .map(entry => ({entry, score: evaluateEntry(entry)}))
       .filter(row => row.score.completed)
       .sort((a, b) => b.score.points - a.score.points);
     let previous;
