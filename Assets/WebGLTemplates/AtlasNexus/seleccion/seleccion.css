@@ -636,6 +636,7 @@ noscript { display: block; padding: 1rem; background: var(--paper); color: var(-
     padding-top: 1rem;
   }
 
+  #voice-interview-panel,
   #voice-report {
     scroll-margin-top: calc(clamp(180px, 33svh, 285px) + .55rem);
   }

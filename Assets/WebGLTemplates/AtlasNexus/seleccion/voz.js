@@ -187,7 +187,7 @@
         playing: false, waiters:complete ? [complete] : []};
       speech = turn;
       turn.timeout = root.setTimeout(() => failSpeech(turn, SPEECH_ERROR), REQUEST_MS);
-      if (lastAudio?.text !== question) onStatus('Preparando la voz del entrevistador…');
+      if (lastAudio?.text !== question) onStatus('Preparando la voz de Cherry…');
       void playQuestion(turn, resumed);
       return true;
     }

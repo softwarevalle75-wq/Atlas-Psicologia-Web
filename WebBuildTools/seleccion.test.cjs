@@ -78,7 +78,7 @@ test('hands-free session speaks, listens after audio, shows interim text, and ad
   get('begin').click();
   await flush();
   assert.equal(transport.active,false);
-  assert.match(transport.playback[0],/Hola, soy tu entrevistador/);
+  assert.match(transport.playback[0],/Hola, soy Cherry/);
   assert.equal(get('interview-flow').querySelector('textarea,input'),null);
   transport.ended('finished');
   await flush();

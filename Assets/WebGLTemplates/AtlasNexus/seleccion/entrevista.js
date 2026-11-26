@@ -32,7 +32,7 @@
     const voice = root.AtlasHiringVoice.create({
       onStatus: value => { if (current && value) status.textContent = value; },
       onSpeaking: active => {
-        if (current && phase === 'speaking' && active) status.textContent = 'El entrevistador está hablando';
+        if (current && phase === 'speaking' && active) status.textContent = 'Cherry está hablando';
       },
       onSpeechLevel: value => scene?.setSpeechLevel?.(value),
     });
@@ -72,7 +72,7 @@
       scene?.setMode(modes[next] || 'idle');
       const office = document.querySelector('.office');
       if (office) office.dataset.activity = modes[next] || 'idle';
-      byId('office-mode').textContent = next === 'speaking' ? 'Entrevistador hablando' : next === 'listening' ? 'Micrófono activo' : next === 'thinking' ? 'Preparando respuesta' : '';
+      byId('office-mode').textContent = next === 'speaking' ? 'Cherry habla' : next === 'listening' ? 'Micrófono activo' : next === 'thinking' ? 'Preparando respuesta' : '';
       byId('voice-interview-stop').hidden = next !== 'listening';
       byId('voice-interview-repeat').disabled = !['speaking','listening','ready'].includes(next);
       byId('voice-interview-finish').disabled = next === 'thinking' && Boolean(current?.finishing);
@@ -150,7 +150,7 @@
     async function speak(session, text) {
       if (session.paused) return;
       mic.stop();
-      setPhase('speaking','El entrevistador está preparando la voz…');
+      setPhase('speaking','Preparando la voz de Cherry…');
       // A question may be replayed during an earlier playback. Only the newest playback opens the microphone.
       const playback = ++session.playback;
       const result = await voice.speakAndWait(text);
@@ -163,7 +163,7 @@
       const item = session.items[session.index];
       const initial = session.turns.length === 0;
       const full = [
-        opening ? 'Hola, soy tu entrevistador. Responde en voz alta al terminar mi pregunta. Empecemos.' : '',
+        opening ? 'Hola, soy Cherry. Responde en voz alta al terminar mi pregunta. Empecemos.' : '',
         initial ? item.brief : '',
         prompt,
       ].filter(Boolean).join(' ');
@@ -205,7 +205,9 @@
       try { session.prepared = await mic.prepare() !== false; } catch {}
       if (current === session && !session.finishing) {
         ask(session,session.items[0].prompt,true);
-        question.scrollIntoView?.({block:'nearest'});
+        const portrait = root.matchMedia?.('(max-width: 720px) and (orientation: portrait)').matches;
+        if (portrait) byId('voice-interview-panel').scrollIntoView?.({block:'start'});
+        else question.scrollIntoView?.({block:'nearest'});
       }
     }
 

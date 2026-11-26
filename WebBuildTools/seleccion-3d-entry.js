@@ -86,11 +86,14 @@ function poseAvatar(gltf, modeConfig) {
   if (!(size.y > 0) || size.y > 200) throw Error('Invalid avatar dimensions');
   const center = bounds.getCenter(new Vector3());
   const scale = modeConfig.height / size.y;
+  const seat = avatar.getObjectByName('CherrySeatAnchor')?.getWorldPosition(new Vector3());
   const placement = new Group();
-  avatar.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+  if (seat) avatar.position.copy(seat).multiplyScalar(-scale);
+  else avatar.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
   avatar.scale.multiplyScalar(scale);
   placement.add(avatar);
-  placement.position.copy(avatarPosition);
+  if (seat) placement.position.set(0, .48, -2.64);
+  else placement.position.copy(avatarPosition);
   placement.rotation.y = modeConfig.turn || 0;
 
   const mixer = new AnimationMixer(avatar);
@@ -116,13 +119,13 @@ function poseAvatar(gltf, modeConfig) {
     const names = Object.keys(dictionary);
     const mouth = pickName(names, /^(jawopen|mouthopen|mouth_open|viseme_aa|vrc\.v_aa|ah|aa)$/i);
     if (mouth) morphs.mouth.push([mesh.morphTargetInfluences, dictionary[mouth]]);
-    names.filter(name => /blink|eyes?closed/i.test(name))
+    names.filter(name => /blink|eyes?closed|parpadeo/i.test(name))
       .forEach(name => morphs.blink.push([mesh.morphTargetInfluences, dictionary[name]]));
   });
 
   const findBone = pattern => bones.find(bone => pattern.test(bone.name));
-  const head = findBone(/(^|[:_. -])head$|recruiterhead/i);
-  const body = findBone(/(^|[:_. -])(spine1|chest)$|^spine_03$|recruiterchest/i);
+  const head = findBone(/(^|[:_. -]|mixamorig)head$|recruiterhead/i);
+  const body = findBone(/(^|[:_. -])(spine1|chest)$|mixamorig[:_. -]?spine2$|^spine_03$|recruiterchest/i);
   const arm = findBone(/rightforearm$|^lowerarm_r$|recruiterrightarm/i);
   const jaw = findBone(/(^|[:_. -])jaw$|recruiterjaw/i);
   const restPoses = [head, body, arm, jaw].map(node => node?.quaternion.clone());
@@ -244,7 +247,7 @@ export function mount(container, announce) {
     const loader = new GLTFLoader();
     const [office,interviewer] = await Promise.all([
       loader.loadAsync(localAsset('consultorio.glb')),
-      loader.loadAsync(localAsset('entrevistador.glb'))
+      loader.loadAsync(localAsset('entrevistador.glb?v=0.1.14'))
     ]);
     office.scene.traverse(node => {
       const name = node.name.replace(/[_\s]+/g, ' ');
